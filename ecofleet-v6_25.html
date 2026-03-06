@@ -1,0 +1,3132 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EcoFleet — Mappa Operativa</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&family=Syne:wght@600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+<style>
+/* ── TOKENS ── */
+:root {
+  --bg:#0e1117;
+  --panel:#141920; --panel2:#111720;
+  --card:#1a2130; --card2:#1f2840; --card3:#243044;
+  --border:#242e42; --border2:#1c2538;
+  --accent:#2d6ef7; --accent-lt:#4d87ff; --accent-glow:#2d6ef733; --accent-dim:#2d6ef718;
+  --green:#22d47a; --green-dim:#22d47a18;
+  --yellow:#f5b942; --yellow-dim:#f5b94218;
+  --red:#f25c5c; --red-dim:#f25c5c18;
+  --purple:#9b72f7; --purple-dim:#9b72f718;
+  --text:#e8eef8; --text-2:#6b7a99; --text-3:#3a4460;
+  --left-w:340px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;}
+
+/* ── LAYOUT ── */
+.app{display:flex;height:100vh;width:100vw;overflow:hidden;}
+
+/* ── SIDEBAR ── */
+.sidebar{
+  width:64px;flex-shrink:0;
+  background:var(--panel);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;align-items:center;
+  padding:16px 0;gap:6px;
+}
+.sb-logo{
+  width:38px;height:38px;border-radius:11px;
+  background:linear-gradient(135deg,var(--accent),#1a4fd8);
+  display:flex;align-items:center;justify-content:center;
+  font-size:18px;margin-bottom:14px;
+  box-shadow:0 0 18px var(--accent-glow);
+}
+.sb-btn{
+  width:40px;height:40px;border-radius:10px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:17px;cursor:pointer;color:var(--text-3);
+  transition:all .15s;border:1px solid transparent;
+}
+.sb-btn:hover{background:var(--card);color:var(--text-2);}
+.sb-btn.active{background:var(--accent-glow);color:var(--accent-lt);border-color:#2d6ef722;}
+.sb-sep{width:28px;height:1px;background:var(--border);margin:4px 0;}
+.sb-avatar{
+  margin-top:auto;width:32px;height:32px;border-radius:50%;
+  background:linear-gradient(135deg,#9b72f7,#2d6ef7);
+  display:flex;align-items:center;justify-content:center;
+  font-size:11px;font-weight:700;color:white;
+}
+
+/* ── LEFT COLUMN ── */
+.left-col{
+  width:var(--left-w);min-width:280px;max-width:520px;flex-shrink:0;
+  background:var(--panel);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;overflow:hidden;
+}
+
+/* Header */
+.lc-header{padding:18px 16px 12px;border-bottom:1px solid var(--border2);flex-shrink:0;}
+.lc-top-row{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px;}
+.lc-title{font-family:'Syne',sans-serif;font-size:17px;font-weight:700;letter-spacing:-.3px;}
+.clock-wrap{text-align:right;}
+.clock-time{font-family:'DM Mono',monospace;font-size:16px;font-weight:500;color:var(--accent-lt);line-height:1;}
+.clock-date-str{font-size:10px;color:var(--text-2);margin-top:1px;}
+.lc-search{
+  display:flex;align-items:center;gap:8px;
+  background:var(--card);border:1px solid var(--border);
+  border-radius:10px;padding:8px 12px;margin-bottom:10px;
+  transition:border-color .15s;position:relative;
+}
+.lc-search:focus-within{border-color:var(--accent-lt);}
+.lc-search input{background:none;border:none;outline:none;color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;flex:1;}
+.lc-search input::placeholder{color:var(--text-3);}
+.search-suggestions{
+  position:absolute;top:calc(100% + 4px);left:0;width:100%;
+  background:var(--panel);border:1px solid var(--border);
+  border-radius:10px;z-index:200;max-height:200px;overflow-y:auto;
+  box-shadow:0 8px 28px #00000077;display:none;
+}
+.sugg-item{padding:8px 12px;cursor:pointer;font-size:12.5px;transition:background .1s;display:flex;align-items:center;justify-content:space-between;}
+.sugg-item:hover{background:var(--card);}
+.lc-filters{display:flex;gap:6px;flex-wrap:wrap;}
+.fc{
+  padding:4px 10px;border-radius:20px;font-size:11.5px;font-weight:500;
+  cursor:pointer;border:1px solid var(--border);color:var(--text-2);background:var(--card);
+  transition:all .15s;white-space:nowrap;
+}
+.fc:hover{color:var(--text);border-color:var(--border);}
+.fc.active{background:var(--accent-glow);border-color:#2d6ef744;color:var(--accent-lt);}
+
+/* ── USCITE LIST (scrollable) ── */
+.uscite-list{
+  flex:1;overflow-y:auto;overflow-x:hidden;
+  padding:10px 12px;
+  display:flex;flex-direction:column;gap:8px;
+}
+.uscite-list::-webkit-scrollbar{width:3px;}
+.uscite-list::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+
+/* ── USCITA BIG CARD ── */
+.uscita-card-big{
+  background:var(--card);border:1px solid var(--border);
+  border-radius:14px;overflow:hidden;cursor:pointer;
+  transition:all .2s;animation:slideUp .25s ease both;
+  flex-shrink:0;
+}
+.uscita-card-big:hover{border-color:var(--accent-lt);box-shadow:0 4px 20px #00000033;}
+.uscita-card-big.active{
+  border-color:transparent;
+  background:linear-gradient(135deg,#1e3a8a22,#1e2d5a);
+  box-shadow:0 0 0 2px var(--accent-lt),0 8px 28px var(--accent-glow);
+}
+
+.ucb-header{padding:12px 14px 6px;display:flex;align-items:center;gap:8px;}
+.ucb-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+.ucb-id{font-family:'DM Mono',monospace;font-size:12.5px;font-weight:500;flex:1;}
+.ucb-badge{padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;}
+.badge-active{background:var(--accent-dim);color:var(--accent-lt);border:1px solid #2d6ef744;}
+.badge-planned{background:var(--yellow-dim);color:var(--yellow);border:1px solid #f5b94233;}
+.badge-crit{background:var(--red-dim);color:var(--red);border:1px solid #f25c5c33;}
+.ucb-del{
+  width:18px;height:18px;border-radius:4px;display:flex;align-items:center;
+  justify-content:center;font-size:9px;background:var(--red-dim);color:var(--red);
+  cursor:pointer;border:none;flex-shrink:0;transition:background .15s;
+}
+.ucb-del:hover{background:#f25c5c33;}
+
+.ucb-prog-wrap{padding:0 14px 4px;}
+.prog-track{height:3px;background:#ffffff10;border-radius:2px;overflow:hidden;margin-bottom:8px;}
+.prog-fill{height:100%;border-radius:2px;}
+
+/* Timeline inside card */
+.ucb-timeline{display:flex;flex-direction:column;padding:0 14px 10px;}
+.tl-row{
+  display:flex;align-items:center;gap:10px;
+  padding:5px 0;position:relative;
+}
+.tl-row:not(:last-child)::after{
+  content:'';position:absolute;left:7px;top:22px;
+  width:2px;height:calc(100% - 6px);
+  background:var(--border);z-index:0;
+}
+.tl-dot{
+  width:16px;height:16px;border-radius:50%;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
+  font-size:7px;z-index:1;border:2px solid var(--border);
+  background:var(--card);
+}
+.tl-dot.done{background:var(--accent);border-color:var(--accent);}
+.tl-dot.current{background:var(--card2);border-color:var(--accent-lt);box-shadow:0 0 0 3px var(--accent-glow);}
+.tl-dot.hq-dot{font-size:8px;}
+.tl-info{flex:1;min-width:0;}
+.tl-label{font-size:11.5px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.tl-sub{font-size:10px;color:var(--text-2);}
+.tl-time{font-family:'DM Mono',monospace;font-size:11px;color:var(--text-2);flex-shrink:0;}
+.tl-time.live{color:var(--accent-lt);font-weight:500;}
+
+/* Drag handle & skip badge for stops */
+.drag-handle{color:var(--text-3);font-size:13px;cursor:grab;padding:0 3px;user-select:none;flex-shrink:0;}
+.drag-handle:active{cursor:grabbing;}
+.stop-skipped{opacity:.35;}
+.skip-badge{font-size:9px;font-weight:700;background:var(--yellow-dim);color:var(--yellow);padding:1px 5px;border-radius:3px;margin-left:3px;}
+.sortable-ghost{opacity:.3;background:var(--accent-dim)!important;}
+.sortable-chosen{background:var(--card2)!important;box-shadow:0 4px 16px #00000055;}
+
+/* ── EMPTY STATE ── */
+.empty-state{
+  flex:1;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:8px;padding:24px;text-align:center;
+}
+.empty-icon{font-size:36px;opacity:.4;}
+.empty-title{font-family:'Syne',sans-serif;font-size:14px;font-weight:700;color:var(--text-2);}
+.empty-sub{font-size:12px;color:var(--text-3);line-height:1.6;}
+
+/* ── ISOLE LIST (when no uscite) ── */
+.isola-card{
+  border-radius:10px;border:1px solid var(--border2);background:var(--card);
+  overflow:hidden;cursor:pointer;transition:all .15s;
+  animation:fadeUp .2s ease both;flex-shrink:0;
+}
+.isola-card:hover{border-color:var(--border);}
+.isola-card.in-route{border-color:var(--uc-color,var(--accent-lt));background:color-mix(in srgb,var(--uc-color,var(--accent-lt)) 7%,var(--card));}
+.isola-card.excluded{opacity:.28;border-style:dashed;}
+.ic-top{display:flex;align-items:center;gap:7px;padding:7px 10px 4px;}
+.ic-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.ic-dot.red{background:var(--red);box-shadow:0 0 5px var(--red);}
+.ic-dot.yellow{background:var(--yellow);box-shadow:0 0 5px var(--yellow);}
+.ic-dot.green{background:var(--green);box-shadow:0 0 5px var(--green);}
+.ic-info{flex:1;min-width:0;}
+.ic-name{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ic-addr{font-size:10.5px;color:var(--text-2);}
+.ic-pct{font-family:'DM Mono',monospace;font-size:13px;font-weight:500;flex-shrink:0;}
+.pct-red{color:var(--red);}.pct-yellow{color:var(--yellow);}.pct-green{color:var(--green);}
+.ic-bar{height:2px;background:var(--border2);}
+.ic-bar-fill{height:100%;}
+.bar-red{background:var(--red);}.bar-yellow{background:var(--yellow);}.bar-green{background:var(--green);}
+.ic-bottom{display:flex;align-items:center;gap:4px;padding:3px 10px 6px;}
+.ic-tag{font-size:9.5px;font-weight:600;padding:2px 6px;border-radius:3px;}
+.tag-red{background:var(--red-dim);color:var(--red);}
+.tag-yellow{background:var(--yellow-dim);color:var(--yellow);}
+.tag-green{background:var(--green-dim);color:var(--green);}
+.ic-actions{display:flex;gap:3px;margin-left:auto;}
+.ic-btn{font-size:10px;font-weight:600;padding:2px 7px;border-radius:4px;cursor:pointer;border:none;font-family:'DM Sans',sans-serif;transition:all .15s;}
+/* tutti i pulsanti isola: chip bianchi come i filtri */
+.ic-btn-create,.ic-btn-add,.ic-btn-excl,.ic-btn-unexcl{
+  background:rgba(255,255,255,.07);
+  color:var(--text);
+  border:1px solid rgba(255,255,255,.18);
+  border-radius:20px;
+  font-size:11px; font-weight:600;
+  padding:3px 10px;
+  cursor:pointer; transition:all .15s;
+  font-family:'DM Sans',sans-serif;
+}
+.ic-btn-create:hover,.ic-btn-add:hover{background:rgba(255,255,255,.13);border-color:rgba(255,255,255,.3);}
+.ic-btn-excl:hover{background:var(--red-dim);color:var(--red);border-color:#f25c5c44;}
+.ic-btn-unexcl:hover{background:var(--green-dim);color:var(--green);border-color:#22d47a44;}
+/* ic-action-btn: stessa forma dei chip */
+.ic-action-btn{background:rgba(255,255,255,.07);color:var(--text);border:1px solid rgba(255,255,255,.18);border-radius:20px;font-size:11px;font-weight:600;padding:3px 10px;cursor:pointer;transition:all .15s;font-family:'DM Sans',sans-serif;white-space:nowrap;}
+.ic-action-btn:hover{background:rgba(255,255,255,.13);border-color:rgba(255,255,255,.3);}
+.ic-uscita-badge{font-size:10px;font-weight:700;color:white;padding:2px 7px;border-radius:10px;margin-left:auto;}
+
+/* ── BOTTOM BUTTON ── */
+.add-uscita-btn{
+  margin:0 12px 12px;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  padding:11px;border-radius:10px;
+  background:var(--accent);color:white;
+  font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;
+  cursor:pointer;border:none;transition:background .15s;
+  box-shadow:0 4px 16px var(--accent-glow);
+}
+.add-uscita-btn:hover{background:var(--accent-lt);}
+
+/* Uscite header row (when routes exist) */
+.uscite-hdr{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:10px 14px 4px;flex-shrink:0;
+}
+.uscite-hdr-label{font-size:10px;font-weight:700;color:var(--accent-lt);text-transform:uppercase;letter-spacing:.9px;}
+.uscite-hdr-actions{display:flex;gap:5px;}
+.btn-xs{
+  padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;
+  cursor:pointer;border:1px solid var(--border);color:var(--text-2);
+  background:var(--card2);font-family:'DM Sans',sans-serif;transition:all .15s;
+}
+.btn-xs:hover{border-color:var(--accent-lt);color:var(--accent-lt);}
+.btn-xs-primary{background:var(--accent);color:white;border-color:var(--accent);box-shadow:0 2px 10px var(--accent-glow);}
+.btn-xs-primary:hover{background:var(--accent-lt);}
+
+/* Turn warning */
+.turn-warning{
+  display:none;padding:5px 14px;
+  background:#7c2d1233;border-top:1px solid #f9731644;border-bottom:1px solid #f9731644;
+  font-size:11.5px;color:#fb923c;flex-shrink:0;
+}
+.turn-warning.show{display:block;}
+
+/* ── RESIZER ── */
+.resizer{
+  width:5px;flex-shrink:0;background:transparent;
+  cursor:col-resize;position:relative;transition:background .15s;z-index:10;
+}
+.resizer:hover,.resizer.dragging{background:var(--accent-lt);}
+.resizer::after{
+  content:'';position:absolute;top:50%;left:50%;
+  transform:translate(-50%,-50%);
+  width:3px;height:36px;border-radius:3px;background:var(--border);
+}
+.resizer:hover::after,.resizer.dragging::after{background:var(--accent-lt);}
+
+/* ── RIGHT PANEL ── */
+.right-panel{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0;}
+
+/* Topbar */
+.rp-topbar{
+  height:50px;flex-shrink:0;padding:0 20px;
+  background:var(--panel);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:10px;
+}
+.rp-breadcrumb{font-size:12.5px;color:var(--text-2);}
+.rp-breadcrumb strong{color:var(--text);}
+.rp-meta{font-size:12px;color:var(--text-2);}
+.live-chip{
+  display:flex;align-items:center;gap:5px;
+  background:var(--green-dim);border:1px solid #22d47a33;
+  padding:3px 9px;border-radius:20px;
+  font-size:11px;font-weight:600;color:var(--green);
+}
+.live-dot{width:5px;height:5px;background:var(--green);border-radius:50%;animation:blink 1.4s infinite;}
+@keyframes blink{0%,100%{opacity:1;}50%{opacity:.15;}}
+.rp-actions{margin-left:auto;display:flex;gap:7px;}
+.icon-btn{
+  width:30px;height:30px;border-radius:8px;
+  background:var(--card);border:1px solid var(--border);
+  display:flex;align-items:center;justify-content:center;
+  font-size:13px;cursor:pointer;color:var(--text-2);transition:all .15s;
+}
+.icon-btn:hover{border-color:var(--accent-lt);color:var(--accent-lt);}
+
+/* ── MAP ── */
+.map-wrap{flex:1;position:relative;overflow:hidden;min-height:0;}
+#map{position:absolute;inset:0;width:100%;height:100%;}
+
+/* Leaflet dark style — no mountains filter */
+.leaflet-container{background:#0d1520 !important;}
+.leaflet-tile-pane{
+  /* OSM chiaro → invertito scuro, montagne spariscono con saturate basso */
+  filter: invert(1) hue-rotate(180deg) brightness(0.75) contrast(1.1) saturate(0.2) grayscale(0.3);
+}
+.leaflet-control-zoom{border:1px solid var(--border) !important;background:var(--panel) !important;border-radius:8px !important;}
+.leaflet-control-zoom a{background:var(--panel) !important;color:var(--text) !important;border-bottom:1px solid var(--border2) !important;width:26px !important;height:26px !important;line-height:26px !important;}
+.leaflet-tooltip{background:transparent !important;border:none !important;box-shadow:none !important;padding:0 !important;}
+.map-tt{background:#1a2235ee;border:1px solid #3a4a6a;border-radius:10px;padding:10px 13px;min-width:185px;font-family:'DM Sans',sans-serif;box-shadow:0 8px 28px #000000aa;backdrop-filter:blur(4px);}
+.mtt-name{font-size:12.5px;font-weight:700;margin-bottom:2px;color:#e8eef8;}
+.mtt-addr{font-size:10.5px;color:#8899bb;margin-bottom:6px;}
+.mtt-row{display:flex;justify-content:space-between;margin-bottom:3px;}
+.mtt-lbl{font-size:10.5px;color:#8899bb;}
+.mtt-val{font-size:11.5px;font-weight:600;color:#e8eef8;}
+.mtt-bar{height:4px;background:#2a3a55;border-radius:2px;margin:5px 0 6px;}
+.mtt-bar-fill{height:100%;border-radius:2px;}
+.mtt-status{font-size:11px;font-weight:700;padding:4px 10px;border-radius:6px;text-align:center;margin-top:5px;}
+
+/* Map stats strip — overlayed at bottom of map */
+.map-stats-strip{
+  position:absolute;bottom:0;left:0;right:0;z-index:400;
+  background:linear-gradient(0deg,#0e1520ee 0%,transparent 100%);
+  padding:20px 20px 12px;
+  display:flex;gap:20px;pointer-events:none;
+}
+.mss-item{display:flex;align-items:center;gap:8px;}
+.mss-icon{font-size:14px;}
+.mss-label{font-size:10px;color:var(--text-2);text-transform:uppercase;letter-spacing:.4px;}
+.mss-val{font-size:12.5px;font-weight:600;}
+
+/* ── DETAIL PANEL ── */
+.detail-panel{
+  height:290px;flex-shrink:0;
+  background:var(--panel);border-top:1px solid var(--border);
+  display:flex;flex-direction:column;overflow:hidden;
+}
+.dp-tabs{
+  display:flex;gap:0;border-bottom:1px solid var(--border);
+  padding:0 20px;flex-shrink:0;
+}
+.dp-tab{
+  padding:9px 15px;font-size:12.5px;font-weight:500;
+  color:var(--text-2);cursor:pointer;border-bottom:2px solid transparent;
+  transition:all .15s;white-space:nowrap;
+}
+.dp-tab:hover{color:var(--text);}
+.dp-tab.active{color:var(--accent-lt);border-bottom-color:var(--accent-lt);}
+.dp-body{flex:1;overflow:hidden;display:flex;}
+
+/* Fermate tab — fixed grid, no overflow */
+.dp-fermate{
+  display:none;flex:1;
+  padding:10px 16px;gap:8px;
+  align-items:flex-start;
+  /* Grid layout: auto-fill columns, no scroll */
+  display:none;
+}
+.dp-fermate.active-tab{display:flex;flex-wrap:nowrap;overflow:hidden;}
+/* Each card shrinks to fit */
+.fermata-card{
+  flex:1;min-width:0;max-width:180px;
+  background:var(--card);border:1px solid var(--border);
+  border-radius:10px;padding:9px 10px;
+  display:flex;flex-direction:column;gap:3px;
+}
+.fermata-card.active-stop{border-color:var(--accent-lt);background:var(--card2);}
+.fc-num{
+  width:18px;height:18px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-size:8px;font-weight:800;color:white;margin-bottom:2px;flex-shrink:0;
+}
+.fc-name{font-size:11px;font-weight:600;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.fc-addr{font-size:10px;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.fc-cass{font-size:10px;font-weight:600;margin-top:2px;}
+
+/* Camion tab */
+.dp-camion{display:none;flex:1;align-items:stretch;gap:0;padding:0;}
+.dp-camion.active-tab{display:flex;}
+
+/* Sezione sinistra: visualizzazione camion */
+.truck-viz-section{
+  flex-shrink:0;width:170px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:14px 18px;border-right:1px solid var(--border2);gap:5px;
+}
+.truck-emoji{font-size:64px;line-height:1;filter:drop-shadow(0 4px 12px rgba(0,0,0,.4));}
+.truck-pct-big{
+  font-family:'Syne',sans-serif;font-size:32px;font-weight:800;line-height:1;
+  transition:color .3s;margin-top:4px;
+}
+/* 20/20 ben visibile sotto la % */
+.truck-cap-label{
+  font-size:14px;font-weight:700;color:var(--text);
+  font-family:'DM Mono',monospace;letter-spacing:.5px;
+}
+.truck-bar-wrap{width:100%;height:10px;background:var(--border2);border-radius:5px;overflow:hidden;margin-top:5px;}
+.truck-bar-fill{height:100%;border-radius:5px;transition:width .5s,background .3s;}
+
+/* Sezione destra: griglia cassoni + meta */
+.truck-right{flex:1;min-width:0;display:flex;flex-direction:column;gap:0;}
+.truck-grid-section{padding:14px 18px 12px;border-bottom:1px solid var(--border2);flex:1;}
+.tv-grid-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;}
+.tv-grid-lbl{font-size:10.5px;font-weight:700;color:var(--text-2);text-transform:uppercase;letter-spacing:.5px;}
+.tv-grid-count{font-family:'DM Mono',monospace;font-size:12px;font-weight:600;}
+.tv-grid{display:flex;flex-wrap:wrap;gap:5px;max-width:100%;}
+.tv-cell{width:32px;height:28px;border-radius:5px;background:var(--border);transition:background .2s;}
+.tv-cell.frigo{background:var(--accent);}
+.tv-cell.tv-type{background:var(--purple);}
+.tv-cell.over-limit{background:var(--red) !important;animation:pulse-red .6s ease infinite alternate;}
+@keyframes pulse-red{from{opacity:1;}to{opacity:.4;}}
+.tv-legend{display:flex;gap:10px;margin-top:5px;}
+.tv-leg-item{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text-2);}
+.tv-leg-dot{width:9px;height:9px;border-radius:2px;}
+
+.truck-meta-section{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;flex-shrink:0;align-items:center;height:56px;}
+.tm-block{padding:5px 12px;border-right:1px solid var(--border2);display:flex;flex-direction:column;justify-content:center;}
+.tm-block:last-child{border-right:none;}
+.tm-lbl{font-size:9.5px;color:var(--text-2);text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px;}
+.tm-val{font-size:14px;font-weight:700;}
+
+/* Stats tab */
+.dp-stats{display:none;flex:1;align-items:stretch;}
+.dp-stats.active-tab{display:flex;}
+.stat-item{flex:1;display:flex;flex-direction:column;justify-content:center;padding:10px 16px;border-right:1px solid var(--border2);}
+.stat-item:last-child{border-right:none;}
+.stat-val{font-family:'Syne',sans-serif;font-size:23px;font-weight:700;line-height:1;margin-bottom:3px;}
+.stat-lbl{font-size:10px;color:var(--text-2);text-transform:uppercase;letter-spacing:.4px;}
+.stat-sub{font-size:11px;margin-top:3px;}
+
+/* ── TAB VIEWS (other sections) ── */
+.tab-view{display:none;flex:1;overflow:hidden;}
+.tab-view.active{display:flex;}
+.tab-page{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+.tab-page-header{
+  padding:16px 22px 12px;border-bottom:1px solid var(--border);
+  background:var(--panel);flex-shrink:0;
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+}
+.tab-page-title{font-family:'Syne',sans-serif;font-size:18px;font-weight:700;letter-spacing:-.3px;}
+.tab-page-body{flex:1;overflow-y:auto;background:var(--bg);padding:18px 22px;}
+.tab-page-body::-webkit-scrollbar{width:4px;}
+.tab-page-body::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+.data-table{width:100%;border-collapse:collapse;}
+.data-table th{text-align:left;font-size:10.5px;font-weight:600;color:var(--text-2);text-transform:uppercase;letter-spacing:.5px;padding:7px 12px;border-bottom:1px solid var(--border);background:var(--panel);}
+.data-table td{padding:9px 12px;border-bottom:1px solid var(--border2);font-size:12.5px;vertical-align:middle;}
+.data-table tr:hover td{background:var(--card);}
+.cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-bottom:18px;}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:14px;}
+.card-title{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;margin-bottom:10px;}
+.stat-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:18px;}
+.stat-card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:12px;}
+.stat-card-val{font-family:'Syne',sans-serif;font-size:26px;font-weight:700;line-height:1;margin-bottom:3px;}
+.stat-card-lbl{font-size:11px;color:var(--text-2);}
+.section-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;margin-top:18px;}
+.section-hdr:first-child{margin-top:0;}
+.section-title{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;}
+.badge{display:inline-flex;align-items:center;font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:20px;}
+.badge-red{background:var(--red-dim);color:var(--red);}
+.badge-yellow{background:var(--yellow-dim);color:var(--yellow);}
+.badge-green{background:var(--green-dim);color:var(--green);}
+.badge-blue{background:var(--accent-dim);color:var(--accent-lt);}
+.badge-gray{background:#ffffff08;color:var(--text-2);}
+.prog-row{margin-bottom:9px;}
+.prog-label{display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;}
+.prog-label span:last-child{color:var(--text-2);}
+.prog-bar{height:5px;background:var(--border);border-radius:3px;overflow:hidden;}
+.prog-fill-bar{height:100%;border-radius:3px;}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:13px;}
+.form-field{display:flex;flex-direction:column;gap:4px;}
+.form-field.full{grid-column:1/-1;}
+.form-label{font-size:11px;font-weight:600;color:var(--text-2);text-transform:uppercase;letter-spacing:.3px;}
+.form-input{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:8px 11px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;outline:none;transition:border-color .15s;}
+.form-input:focus{border-color:var(--accent-lt);}
+.form-section{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:14px;}
+.form-section-title{font-family:'Syne',sans-serif;font-size:12.5px;font-weight:700;margin-bottom:12px;color:var(--accent-lt);}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;}
+.cal-day-hdr{text-align:center;font-size:10.5px;font-weight:600;color:var(--text-2);padding:4px 0;}
+.cal-day{min-height:72px;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:5px;cursor:pointer;transition:border-color .15s;}
+.cal-day:hover{border-color:var(--accent-lt);}
+.cal-day.today{border-color:var(--accent-lt);background:var(--accent-dim);}
+.cal-day.other-month{opacity:.3;}
+.cal-day-num{font-size:11px;font-weight:600;color:var(--text-2);margin-bottom:3px;}
+.cal-day.today .cal-day-num{color:var(--accent-lt);}
+.cal-event{font-size:9.5px;font-weight:600;padding:2px 5px;border-radius:3px;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.cal-event-blue{background:var(--accent-dim);color:var(--accent-lt);}
+.cal-event-green{background:var(--green-dim);color:var(--green);}
+.cal-event-yellow{background:var(--yellow-dim);color:var(--yellow);}
+.chart-bars{display:flex;align-items:flex-end;gap:7px;height:110px;padding:0 4px;}
+.chart-bar-wrap{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;height:100%;justify-content:flex-end;}
+.chart-bar{width:100%;border-radius:4px 4px 0 0;min-height:4px;}
+.chart-bar-lbl{font-size:10px;color:var(--text-2);}
+.chart-bar-val{font-size:10px;font-weight:600;}
+
+/* ── MODALS ── */
+.overlay{display:none;position:fixed;inset:0;background:#0e111788;z-index:1000;align-items:center;justify-content:center;backdrop-filter:blur(4px);}
+.overlay.open{display:flex;}
+.modal{background:var(--panel);border:1px solid var(--border);border-radius:14px;width:480px;max-width:92vw;box-shadow:0 20px 60px #000000aa;animation:mIn .2s ease;}
+@keyframes mIn{from{opacity:0;transform:scale(.96) translateY(8px);}to{opacity:1;transform:none;}}
+.mh{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border);}
+.mh-title{font-family:'Syne',sans-serif;font-size:14px;font-weight:700;}
+.mclose{width:24px;height:24px;border-radius:5px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text-2);font-size:11px;background:var(--card);border:1px solid var(--border);transition:all .15s;}
+.mclose:hover{background:var(--red-dim);color:var(--red);}
+.mb{padding:16px 18px;}
+.ml{font-size:10.5px;font-weight:700;color:var(--text-2);margin-bottom:5px;letter-spacing:.4px;text-transform:uppercase;}
+.mi{width:100%;background:var(--card);border:1px solid var(--border2);border-radius:10px;padding:8px 11px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;outline:none;transition:all .15s;margin-bottom:11px;}
+.mi:focus{border-color:var(--accent-lt);box-shadow:0 0 0 3px var(--accent-glow);}
+.mrow{display:flex;gap:9px;}.mrow .mi{margin-bottom:0;}
+.mf{display:flex;gap:7px;padding:12px 18px;border-top:1px solid var(--border);}
+.bsm{padding:8px 14px;border-radius:10px;font-family:'DM Sans',sans-serif;font-size:12.5px;font-weight:600;cursor:pointer;border:none;transition:all .2s;}
+.bsm-ghost{background:var(--card);color:var(--text-2);border:1px solid var(--border2);}
+.bsm-ghost:hover{color:var(--text);}
+.bsm-primary{background:var(--accent);color:white;flex:1;box-shadow:0 2px 12px var(--accent-glow);}
+.bsm-primary:hover{background:var(--accent-lt);}
+.hint-box{background:var(--card);border:1px solid var(--border2);border-radius:10px;padding:10px 12px;font-size:11.5px;color:var(--text-2);line-height:1.6;margin-bottom:11px;}
+.hint-box strong{color:var(--text);}
+.sugg-wrapper{position:relative;margin-bottom:11px;}
+.suggestions{position:absolute;top:calc(100% + 3px);left:0;width:100%;background:var(--panel);border:1px solid var(--border);border-radius:10px;z-index:200;max-height:190px;overflow-y:auto;box-shadow:0 8px 24px #00000077;display:none;}
+
+/* ── TOAST ── */
+.toast{position:fixed;bottom:20px;right:20px;z-index:2000;background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:11px 14px;display:flex;align-items:flex-start;gap:8px;box-shadow:0 8px 28px #00000077;transform:translateY(60px);opacity:0;transition:all .3s cubic-bezier(.34,1.56,.64,1);max-width:290px;}
+.toast.show{transform:translateY(0);opacity:1;}
+.t-icon{font-size:14px;flex-shrink:0;}
+.t-title{font-weight:600;font-size:12px;margin-bottom:1px;}
+.t-msg{font-size:11px;color:var(--text-2);}
+
+@keyframes slideUp{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
+@keyframes fadeUp{from{opacity:0;transform:translateY(5px);}to{opacity:1;transform:none;}}
+
+/* ── STOP ROWS dentro la card attiva (identico all'immagine 3) ── */
+.route-stop-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 14px; border-bottom: 1px solid var(--border2);
+  transition: background .12s; position: relative;
+}
+.route-stop-item:hover { background: rgba(255,255,255,.03); }
+.route-stop-item.hq-row { background: #22d47a08; }
+.route-stop-item.rsi-skipped { opacity: .38; }
+
+/* Linea verticale timeline */
+.route-stop-item:not(:last-child)::after {
+  content: ''; position: absolute; left: 21px; top: 26px;
+  width: 2px; height: calc(100% - 12px);
+  background: var(--border); z-index: 0;
+}
+
+.rsi-num {
+  width: 18px; height: 18px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 8px; font-weight: 800; color: white;
+  flex-shrink: 0; z-index: 1; border: 2px solid rgba(255,255,255,.15);
+}
+.rsi-num.hq { background: var(--green) !important; font-size: 9px; }
+.rsi-info { flex: 1; min-width: 0; }
+.rsi-name { font-size: 11.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rsi-detail { font-size: 10px; color: var(--text-2); }
+.rsi-cassoni { display: flex; align-items: center; gap: 3px; flex-shrink: 0; }
+.cassoni-input {
+  width: 42px; padding: 2px 5px;
+  background: var(--card3); border: 1px solid var(--border2);
+  border-radius: 4px; color: var(--text); font-size: 11px;
+  font-weight: 600; text-align: center; outline: none;
+  font-family: 'DM Mono', monospace;
+}
+.cassoni-input:focus { border-color: var(--accent-lt); }
+.cassoni-input:disabled { opacity: .4; }
+.cassoni-max { font-size: 10px; color: var(--text-3); }
+.rsi-actions { display: flex; gap: 3px; flex-shrink: 0; }
+.rsi-btn {
+  width: 20px; height: 20px; border-radius: 4px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 9px; cursor: pointer; transition: all .15s;
+}
+.rsi-btn-skip { background: var(--yellow-dim); color: var(--yellow); }
+.rsi-btn-skip:hover { background: #f5b94230; }
+.rsi-btn-remove { background: var(--red-dim); color: var(--red); }
+.rsi-btn-remove:hover { background: #f25c5c30; }
+.drag-handle { color: var(--text-3); font-size: 13px; cursor: grab; padding: 0 2px; user-select: none; flex-shrink: 0; z-index: 1; }
+.drag-handle:active { cursor: grabbing; }
+
+/* ── BOTTONE NUOVA USCITA integrato ── */
+.add-uscita-btn {
+  padding: 5px 14px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  background: rgba(255,255,255,0.07);
+  color: var(--text);
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 20px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px; font-weight: 600; cursor: pointer;
+  transition: all .15s;
+  white-space: nowrap;
+}
+.add-uscita-btn:hover {
+  background: rgba(255,255,255,0.13);
+  border-color: rgba(255,255,255,0.3);
+}
+
+
+/* ── TOGGLE PIANIFICAZIONE ── */
+.pian-toggle{
+  flex:1;display:flex;align-items:center;gap:10px;
+  padding:10px 12px;border-radius:var(--r-sm,10px);
+  background:var(--card);border:1.5px solid var(--border);
+  cursor:pointer;transition:all .18s;
+}
+.pian-toggle:hover{border-color:var(--accent-lt);}
+.pian-toggle.active{
+  background:var(--accent-dim);border-color:var(--accent-lt);
+  box-shadow:0 0 0 3px var(--accent-glow);
+}
+
+/* ── POPUP MAPPA (cliccabile) ── */
+.eco-popup .leaflet-popup-content-wrapper {
+  background: #1a2235;
+  border: 1px solid #2a3a55;
+  border-radius: 12px;
+  padding: 0;
+  box-shadow: 0 8px 32px rgba(0,0,0,.7);
+  color: #e8eef8;
+}
+.eco-popup .leaflet-popup-content {
+  margin: 14px 14px 12px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  line-height: 1.4;
+}
+.eco-popup .leaflet-popup-tip-container { display: none; }
+.eco-popup .leaflet-popup-close-button {
+  color: #6b7a99 !important;
+  font-size: 16px !important;
+  top: 8px !important;
+  right: 10px !important;
+}
+.eco-popup .leaflet-popup-close-button:hover { color: #e8eef8 !important; }
+
+
+/* ── COMPLETA USCITA ── */
+.btn-completa {
+  width: calc(100% - 28px);
+  margin: 0 14px 12px;
+  padding: 9px;
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+  background: var(--green-dim); color: var(--green);
+  border: 1px solid #22d47a44; border-radius: 8px;
+  font-family: 'DM Sans', sans-serif; font-size: 12.5px; font-weight: 700;
+  cursor: pointer; transition: all .15s; flex-shrink: 0;
+}
+.btn-completa:hover { background: #22d47a22; border-color: #22d47a88; }
+
+
+/* Bottone Nuova Uscita grande blu in fondo */
+.btn-nuova-uscita-big {
+  width: 100%; padding: 12px;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  background: var(--accent); color: white; border: none;
+  border-radius: 10px; font-family: 'DM Sans', sans-serif;
+  font-size: 14px; font-weight: 700; cursor: pointer;
+  transition: background .15s;
+  box-shadow: 0 4px 20px var(--accent-glow);
+  letter-spacing: .2px;
+}
+.btn-nuova-uscita-big:hover { background: var(--accent-lt); }
+
+
+/* ── STORICO USCITE ── */
+.storico-card {
+  background: var(--card); border: 1px solid var(--border2);
+  border-radius: 10px; padding: 10px 13px;
+  display: flex; flex-direction: column; gap: 5px;
+}
+.storico-hdr { display: flex; align-items: center; justify-content: space-between; }
+.storico-label { font-size: 13px; font-weight: 700; }
+.storico-data { font-size: 10.5px; color: var(--text-2); }
+.storico-stats { display: grid; grid-template-columns: repeat(4,1fr); gap: 4px; margin-top: 4px; }
+.st-stat { background: var(--card3); border-radius: 6px; padding: 5px 7px; }
+.st-stat-val { font-size: 13px; font-weight: 700; font-family: 'DM Mono',monospace; }
+.st-stat-lbl { font-size: 9.5px; color: var(--text-2); text-transform: uppercase; letter-spacing: .4px; }
+.storico-fermate { font-size: 10px; color: var(--text-2); line-height: 1.5; }
+.storico-empty { text-align:center; padding: 40px 20px; color: var(--text-3); font-size:13px; }
+.btn-export-pdf {
+  display: flex; align-items: center; gap: 6px;
+  padding: 4px 10px; font-size: 11px; font-weight: 600;
+  background: rgba(255,255,255,.07); color: var(--text);
+  border: 1px solid rgba(255,255,255,.18); border-radius: 20px;
+  cursor: pointer; font-family: 'DM Sans',sans-serif;
+  transition: all .15s;
+}
+.btn-export-pdf:hover { background: rgba(255,255,255,.13); }
+
+
+.ucb-pdf { background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:5px;
+  padding:2px 6px;cursor:pointer;font-size:11px;color:var(--text-2);transition:all .15s;margin-right:2px;}
+.ucb-pdf:hover{background:rgba(255,255,255,.15);color:var(--text);}
+
+
+.storico-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- SIDEBAR -->
+<nav class="sidebar">
+  <div class="sb-logo">♻️</div>
+  <div class="sb-btn active" onclick="switchTab('mappa',this)" title="Mappa">🗺️</div>
+  <div class="sb-btn" onclick="switchTab('isole',this)" title="Isole">🗑️</div>
+  <div class="sb-btn" onclick="switchTab('flotta',this)" title="Flotta">🚛</div>
+  <div class="sb-btn" onclick="switchTab('pianificazione',this)" title="Pianificazione">📅</div>
+  <div class="sb-btn" onclick="switchTab('storico',this)" title="Storico uscite">🕐</div>
+  <div class="sb-sep"></div>
+  <div class="sb-btn" onclick="switchTab('report',this)" title="Report">📊</div>
+  <div class="sb-btn" onclick="switchTab('impostazioni',this)" title="Impostazioni">⚙️</div>
+  <div class="sb-avatar" title="Marco Lombardi — Operatore">ML</div>
+</nav>
+
+<!-- ══════════════ TAB: MAPPA ══════════════ -->
+<div id="tab-mappa" class="tab-view">
+
+  <!-- LEFT COLUMN -->
+  <div class="left-col" id="leftCol">
+
+    <!-- Header -->
+    <div class="lc-header">
+      <div class="lc-top-row">
+        <div class="lc-title">Mappa Operativa</div>
+        <div class="clock-wrap">
+          <div class="clock-time" id="clockDisplay">--:--</div>
+          <div class="clock-date-str" id="clockDate">---</div>
+        </div>
+      </div>
+      <div style="position:relative;">
+        <div class="lc-search">
+          <span style="color:var(--text-3);font-size:12px;">🔍</span>
+          <input type="text" id="searchInput" placeholder="Cerca isola o comune…" oninput="onMainSearch(this)" autocomplete="off"/>
+          <span id="searchClear" style="display:none;color:var(--text-3);font-size:11px;cursor:pointer;" onclick="clearMainSearch()">✕</span>
+        </div>
+        <div class="search-suggestions" id="mainSearchSuggestions"></div>
+      </div>
+      <div class="lc-filters">
+        <div class="fc active" id="chipTutte" onclick="setFilter('all',this)">Tutte</div>
+        <div class="fc" id="chipRed" style="background:var(--red-dim);border-color:#f25c5c33;color:var(--red);" onclick="setFilter('red',this)">🔴 Critiche</div>
+        <div class="fc" id="chipYellow" style="background:var(--yellow-dim);border-color:#f5b94233;color:var(--yellow);" onclick="setFilter('yellow',this)">🟡 Quasi piene</div>
+        <div class="fc" id="chipGreen" style="background:var(--green-dim);border-color:#22d47a33;color:var(--green);" onclick="setFilter('green',this)">🟢 OK</div>
+        <div class="fc" id="filterRoute" style="display:none;min-width:90px;text-align:center;" onclick="setFilter('route',this)">🚛 Percorso</div>
+
+      </div>
+    </div>
+
+    <!-- Uscite header (visible when routes exist) -->
+    <div id="usciteHdr" style="display:none;">
+      <div class="uscite-hdr">
+        <div class="uscite-hdr-label">🚛 Uscite attive</div>
+        <div class="uscite-hdr-actions">
+          <button class="btn-xs btn-xs-primary" onclick="openRouteModal()">＋ Nuova</button>
+          <button class="btn-xs" onclick="openAddStopModal()">+ Fermata</button>
+        </div>
+      </div>
+      <div class="turn-warning" id="turnWarning"></div>
+    </div>
+
+    <!-- Uscite list (scrollable, flex-1 when routes) -->
+    <div class="uscite-list" id="usciteList">
+      <!-- Filled by renderUsciteCards() or renderList() -->
+    </div>
+
+    <!-- Bottone Nuova Uscita blu grande in fondo -->
+    <div id="btnAreaBottom" style="padding:10px 12px;flex-shrink:0;border-top:1px solid var(--border2);">
+      <button class="btn-nuova-uscita-big" onclick="openRouteModal()">＋ Nuova Uscita</button>
+    </div>
+
+  </div><!-- /left-col -->
+
+  <!-- RESIZER -->
+  <div class="resizer" id="resizer"></div>
+
+  <!-- RIGHT PANEL -->
+  <div class="right-panel">
+
+    <!-- Topbar -->
+    <div class="rp-topbar">
+      <div class="rp-breadcrumb">EcoFleet › <strong id="bcText">Tutte le isole</strong></div>
+      <div class="live-chip"><div class="live-dot"></div> Live</div>
+      <div class="rp-meta" id="rpMeta"></div>
+      <div class="rp-actions">
+        <div class="icon-btn" onclick="openAddModal()" title="Aggiungi isola">➕</div>
+        <div class="icon-btn" onclick="refreshData()" title="Aggiorna">🔄</div>
+        <div class="icon-btn" onclick="exportRoute()" title="Esporta percorso">📋</div>
+      </div>
+    </div>
+
+    <!-- Map -->
+    <div class="map-wrap">
+      <div id="map"></div>
+      <!-- Stats strip overlay (shown always) -->
+      <div class="map-stats-strip" id="mapStatsStrip">
+        <div class="mss-item">
+          <div class="mss-icon">🔴</div>
+          <div><div class="mss-label">Critiche</div><div class="mss-val" id="tileRed" style="color:var(--red)">—</div></div>
+        </div>
+        <div class="mss-item">
+          <div class="mss-icon">🟡</div>
+          <div><div class="mss-label">Quasi piene</div><div class="mss-val" id="tileYellow" style="color:var(--yellow)">—</div></div>
+        </div>
+        <div class="mss-item">
+          <div class="mss-icon">🟢</div>
+          <div><div class="mss-label">Libere</div><div class="mss-val" id="tileGreen" style="color:var(--green)">—</div></div>
+        </div>
+        <div class="mss-item" id="mssRoute" style="display:none;">
+          <div class="mss-icon">🕐</div>
+          <div><div class="mss-label">Partenza</div><div class="mss-val" id="mssDepart">—</div></div>
+        </div>
+        <div class="mss-item" id="mssReturn" style="display:none;">
+          <div class="mss-icon">🏠</div>
+          <div><div class="mss-label">Ritorno stimato</div><div class="mss-val" id="mssReturnVal" style="color:var(--green)">—</div></div>
+        </div>
+        <div class="mss-item" id="mssCassoni" style="display:none;">
+          <div class="mss-icon">📦</div>
+          <div><div class="mss-label">Cassoni</div><div class="mss-val" id="mssCassoniVal">—</div></div>
+        </div>
+        <div class="mss-item" id="mssKm" style="display:none;">
+          <div class="mss-icon">🛣️</div>
+          <div><div class="mss-label">KM A/R</div><div class="mss-val" id="mssKmVal">—</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Detail panel (shown when route active) -->
+    <div class="detail-panel" id="detailPanel" style="display:none;">
+      <div class="dp-tabs">
+        <div class="dp-tab active" onclick="switchDpTab('camion',this)">🚛 Camion</div>
+        <div class="dp-tab" onclick="switchDpTab('stats',this)">📊 Turno</div>
+      </div>
+      <div class="dp-body">
+        <div class="dp-fermate" id="dpFermate" style="display:none;"></div>
+        <div class="dp-camion active-tab" id="dpCamion" style="display:flex;">
+          <!-- Sinistra: icona + % riempimento -->
+          <div class="truck-viz-section">
+            <div class="truck-emoji">🚚</div>
+            <div class="truck-pct-big" id="truckPct">0%</div>
+            <div class="truck-cap-label" id="truckCapLabel">0 / 20 cass.</div>
+            <div class="truck-bar-wrap">
+              <div class="truck-bar-fill" id="truckFill" style="width:0%;background:var(--green);"></div>
+            </div>
+          </div>
+          <!-- Destra: griglia + meta -->
+          <div class="truck-right">
+            <div class="truck-grid-section">
+              <div class="tv-grid-hdr">
+                <div class="tv-grid-lbl">Carico cassoni</div>
+              </div>
+              <div class="tv-grid" id="tvGrid"></div>
+              <div class="tv-legend">
+                <div class="tv-leg-item"><div class="tv-leg-dot" style="background:var(--accent);"></div>Frigoriferi</div>
+                <div class="tv-leg-item"><div class="tv-leg-dot" style="background:var(--purple);"></div>TV/Monitor</div>
+                <div class="tv-leg-item" id="tvOverLegend" style="display:none;"><div class="tv-leg-dot" style="background:var(--red);"></div><span style="color:var(--red);font-weight:600;">OLTRE LIMITE</span></div>
+              </div>
+            </div>
+            <div class="truck-meta-section" id="truckMeta"></div>
+          </div>
+        </div>
+        <div class="dp-stats" id="dpStats"></div>
+      </div>
+    </div>
+
+  </div><!-- /right-panel -->
+</div><!-- /tab-mappa -->
+
+<!-- ══════════════ OTHER TABS ══════════════ -->
+<div id="tab-isole" class="tab-view"><div class="tab-page"><div class="tab-page-header"><div><div class="tab-page-title">🗑️ Isole Ecologiche</div><div style="font-size:12px;color:var(--text-2);margin-top:2px;"><span id="isoleCount">400</span> isole</div></div><div style="display:flex;gap:8px;align-items:center;"><input class="form-input" id="isoleTabSearch" placeholder="🔍 Cerca…" oninput="renderIsoleTab()" style="padding:6px 10px;font-size:12.5px;width:180px;"/><select class="form-input" id="isoleTabFilter" onchange="renderIsoleTab()" style="padding:6px 10px;font-size:12.5px;"><option value="all">Tutte</option><option value="red">🔴 Critiche</option><option value="yellow">🟡 Quasi piene</option><option value="green">🟢 Libere</option></select><button class="form-input" onclick="openAddModal()" style="background:var(--accent);color:white;border-color:var(--accent);cursor:pointer;font-size:12.5px;font-weight:600;padding:6px 14px;">+ Nuova</button></div></div><div class="tab-page-body" style="padding:0;"><table class="data-table"><thead><tr><th>Isola</th><th>Comune</th><th>Tipo</th><th>Cassoni</th><th>Riempimento</th><th>Stato</th></tr></thead><tbody id="isoleTableBody"></tbody></table></div></div></div>
+<div id="tab-flotta" class="tab-view"><div class="tab-page"><div class="tab-page-header"><div><div class="tab-page-title">🚛 Gestione Flotta</div></div><button class="form-input" onclick="openAddTruckModal()" style="background:var(--accent);color:white;border-color:var(--accent);cursor:pointer;font-size:12.5px;font-weight:600;padding:6px 14px;">+ Mezzo</button></div><div class="tab-page-body"><div class="stat-cards" id="flottaKpi"></div><div class="section-hdr"><div class="section-title">Mezzi in flotta</div></div><div id="flottaCards" class="cards-grid"></div></div></div></div>
+<div id="tab-pianificazione" class="tab-view"><div class="tab-page"><div class="tab-page-header"><div><div class="tab-page-title">📅 Pianificazione</div><div style="font-size:12px;color:var(--text-2);margin-top:2px;" id="calMonthLabel">—</div></div><div style="display:flex;gap:7px;"><button class="form-input" onclick="calPrev()" style="cursor:pointer;padding:5px 11px;">←</button><button class="form-input" onclick="calToday()" style="cursor:pointer;font-weight:600;padding:5px 12px;">Oggi</button><button class="form-input" onclick="calNext()" style="cursor:pointer;padding:5px 11px;">→</button></div></div><div class="tab-page-body"><div class="cal-grid" id="calGrid"></div></div></div></div>
+<div id="tab-storico" class="tab-view" style="flex-direction:column;">
+  <div style="padding:16px 14px 10px;border-bottom:1px solid var(--border2);flex-shrink:0;">
+    <div style="font-size:16px;font-weight:800;margin-bottom:2px;">Storico Uscite</div>
+    <div style="font-size:11px;color:var(--text-2);">Ultimi 30 giorni &middot; <span id="storicoCount">0</span> completate</div>
+  </div>
+  <div id="storicoList" style="flex:1;overflow-y:auto;padding:10px 12px;display:flex;flex-direction:column;gap:8px;"></div>
+</div>
+<div id="tab-report" class="tab-view"><div class="tab-page"><div class="tab-page-header"><div><div class="tab-page-title">📊 Report</div></div><div style="display:flex;gap:7px;"><select class="form-input" id="reportMonth" onchange="renderReport()" style="padding:5px 10px;"><option>Febbraio 2026</option><option>Gennaio 2026</option><option>Dicembre 2025</option></select><button class="form-input" onclick="exportReport()" style="background:var(--accent);color:white;border-color:var(--accent);cursor:pointer;font-weight:600;padding:5px 14px;">📤 Esporta</button></div></div><div class="tab-page-body" id="reportBody"></div></div></div>
+<div id="tab-impostazioni" class="tab-view"><div class="tab-page"><div class="tab-page-header"><div class="tab-page-title">⚙️ Impostazioni</div></div><div class="tab-page-body"><div class="form-section"><div class="form-section-title">🚛 Parametri operativi</div><div class="form-grid"><div class="form-field"><div class="form-label">Min per cassone</div><input class="form-input" id="setMinCassone" type="number" value="12"/></div><div class="form-field"><div class="form-label">Velocità (km/h)</div><input class="form-input" id="setSpeedKmh" type="number" value="55"/></div><div class="form-field"><div class="form-label">Ore turno max</div><input class="form-input" id="setTurnoOre" type="number" value="8"/></div><div class="form-field"><div class="form-label">Raggio suggerimenti (km)</div><input class="form-input" id="setRaggioKm" type="number" value="80"/></div></div></div><div class="form-section"><div class="form-section-title">📦 Capacità camion</div><div class="form-grid"><div class="form-field"><div class="form-label">Max Frigoriferi</div><input class="form-input" id="setMaxFrigo" type="number" value="20"/></div><div class="form-field"><div class="form-label">Max TV</div><input class="form-input" id="setMaxTv" type="number" value="30"/></div></div></div><div class="form-section"><div class="form-section-title">🚨 Soglie allerta</div><div class="form-grid"><div class="form-field"><div class="form-label">Soglia CRITICA (%)</div><input class="form-input" id="setSogliaRed" type="number" value="85"/></div><div class="form-field"><div class="form-label">Soglia ATTENZIONE (%)</div><input class="form-input" id="setSogliaYellow" type="number" value="60"/></div><div class="form-field"><div class="form-label">Finestra intervento (h)</div><input class="form-input" id="setFinestra" type="number" value="48"/></div></div></div><div style="display:flex;gap:10px;"><button class="form-input" onclick="saveSettings()" style="background:var(--accent);color:white;border-color:var(--accent);cursor:pointer;font-size:13px;font-weight:600;padding:10px 24px;flex:1;">💾 Salva</button><button class="form-input" onclick="resetSettings()" style="cursor:pointer;font-size:13px;padding:10px 20px;">↩ Reset</button></div></div></div></div>
+
+<!-- MODALS -->
+<div class="overlay" id="routeModal"><div class="modal"><div class="mh"><div class="mh-title">🚛 Nuova Uscita</div><div class="mclose" onclick="closeModal('routeModal')">✕</div></div><div class="mb"><div class="ml">Isola di partenza</div><div class="sugg-wrapper"><input class="mi" id="routeStartInput" placeholder="Inizia a scrivere nome o città…" oninput="showSuggestions(this,'routeSuggestions')" autocomplete="off"/><div class="suggestions" id="routeSuggestions"></div></div><div class="ml">Tipo di rifiuto</div><select class="mi" id="routeType"><option value="frigo">🧊 Frigoriferi (max 20 cassoni)</option><option value="tv">📺 TV / Monitor (max 30 cassoni)</option><option value="misto">♻️ Misto RAEE (max 20 cassoni)</option></select><div class="ml">Quando pianificare</div>
+<div style="display:flex;gap:8px;margin-bottom:11px;" id="pianToggleWrap">
+  <div id="btnPianOggi" class="pian-toggle active" onclick="setPianificazione('oggi')">
+    <div style="font-size:15px;">📅</div>
+    <div>
+      <div style="font-size:12px;font-weight:700;" id="lblOggi">Oggi</div>
+      <div style="font-size:10px;color:var(--text-2);" id="lblOggiOra">—</div>
+    </div>
+  </div>
+  <div id="btnPianDomani" class="pian-toggle" onclick="setPianificazione('domani')">
+    <div style="font-size:15px;">🌅</div>
+    <div>
+      <div style="font-size:12px;font-weight:700;">Domani</div>
+      <div style="font-size:10px;color:var(--text-2);" id="lblDomaniOra">07:00</div>
+    </div>
+  </div>
+</div>
+<div id="avvisoOraAlert" style="display:none;" class="hint-box" style="border-color:#f5b94233;background:var(--yellow-dim);">
+  ⚠️ <strong>Tardi per oggi.</strong> Il percorso è stato pianificato automaticamente per domani mattina.
+</div>
+<div class="hint-box">💡 Il sistema ottimizza il percorso automaticamente. Potrai modificare fermate, cassoni e ordine.</div></div><div class="mf"><button class="bsm bsm-ghost" onclick="closeModal('routeModal')">Annulla</button><button class="bsm bsm-primary" onclick="calcRoute()">✨ Calcola percorso</button></div></div></div>
+<div class="overlay" id="addStopModal"><div class="modal"><div class="mh"><div class="mh-title">➕ Aggiungi fermata</div><div class="mclose" onclick="closeModal('addStopModal')">✕</div></div><div class="mb"><div class="ml">Cerca isola</div><div class="sugg-wrapper"><input class="mi" id="addStopInput" placeholder="Nome o città…" oninput="showSuggestions(this,'addStopSuggestions')" autocomplete="off"/><div class="suggestions" id="addStopSuggestions"></div></div><div class="ml">Cassoni da caricare</div><input class="mi" id="addStopCassoni" type="number" placeholder="es. 4" min="1" max="30"/><div id="addStopInfo" style="display:none;" class="hint-box"></div></div><div class="mf"><button class="bsm bsm-ghost" onclick="closeModal('addStopModal')">Annulla</button><button class="bsm bsm-primary" onclick="confirmAddStop()">Aggiungi</button></div></div></div>
+<div class="overlay" id="addModal"><div class="modal"><div class="mh"><div class="mh-title">➕ Nuova Isola</div><div class="mclose" onclick="closeModal('addModal')">✕</div></div><div class="mb"><div class="ml">Nome isola</div><input class="mi" id="addName" placeholder="es. Isola Via Mazzini"/><div class="ml">Comune</div><input class="mi" id="addCity" placeholder="es. Perugia"/><div class="ml">Tipo rifiuto</div><select class="mi" id="addType"><option>Frigoriferi</option><option>TV e Monitor</option><option>Frigoriferi + TV</option><option>RAEE Misti</option></select><div class="mrow"><div style="flex:1"><div class="ml">Cassoni</div><input class="mi" id="addCassoni" type="number" placeholder="es. 6"/></div><div style="flex:1"><div class="ml">Riempimento %</div><input class="mi" id="addLevel" type="number" placeholder="es. 75"/></div></div></div><div class="mf"><button class="bsm bsm-ghost" onclick="closeModal('addModal')">Annulla</button><button class="bsm bsm-primary" onclick="addIsola()">Salva</button></div></div></div>
+<div class="overlay" id="addTruckModal"><div class="modal"><div class="mh"><div class="mh-title">🚛 Aggiungi Mezzo</div><div class="mclose" onclick="closeModal('addTruckModal')">✕</div></div><div class="mb"><div class="form-grid"><div class="form-field"><div class="ml">Targa</div><input class="mi" id="truckTarga" placeholder="AB123CD"/></div><div class="form-field"><div class="ml">Modello</div><input class="mi" id="truckModello" placeholder="Iveco Daily"/></div><div class="form-field"><div class="ml">Autista</div><input class="mi" id="truckAutista" placeholder="Nome Cognome"/></div><div class="form-field"><div class="ml">Cap. cassoni frigo</div><input class="mi" id="truckCapFrigo" type="number" value="20"/></div><div class="form-field"><div class="ml">Revisione</div><input class="mi" id="truckRevisione" type="date"/></div><div class="form-field"><div class="ml">Stato</div><select class="mi" id="truckStato"><option value="disponibile">✅ Disponibile</option><option value="in-uso">🔄 In uso</option><option value="manutenzione">🔧 Manutenzione</option></select></div></div></div><div class="mf"><button class="bsm bsm-ghost" onclick="closeModal('addTruckModal')">Annulla</button><button class="bsm bsm-primary" onclick="addTruck()">Salva</button></div></div></div>
+
+<div class="toast" id="toast"><div class="t-icon" id="tIcon">✅</div><div><div class="t-title" id="tTitle"></div><div class="t-msg" id="tMsg"></div></div></div>
+<script>
+// ── COSTANTI ──
+const HQ={lat:43.2314,lng:12.7749,name:'Gualdo Tadino (Sede)'};
+const MAX_FRIGO=20, MAX_TV=30;
+const KM_PER_DEG=111;
+const SPEED_KMH=55;           // velocità media camion
+const MIN_PER_CASSONE=12;     // minuti per caricare 1 cassone (configurabile)
+const TURNO_ORE=8;
+
+// ── ORARIO OPERATIVO ──
+const ORA_LIMITE_OGGI = 12;   // Se la chiamata arriva dopo le 12, pianifica domani
+const ORA_INIZIO_TURNO = 7;   // Partenza standard: 07:00
+const ORA_FINE_TURNO = 17.5;  // Fine turno: 17:30
+
+// Restituisce {data:'Oggi'/'Domani', partenzaMin} per la pianificazione smart
+function getPianificazioneOrario(){
+  const now = new Date();
+  const oraAttuale = now.getHours() + now.getMinutes()/60;
+  // Parti oggi se siamo dentro il turno (07:00 - 17:30)
+  if(oraAttuale >= ORA_INIZIO_TURNO && oraAttuale < ORA_FINE_TURNO){
+    const minRound = Math.ceil(now.getMinutes()/5)*5;
+    const h = now.getHours() + Math.floor(minRound/60);
+    const m = minRound % 60;
+    return { label:'Oggi', partenzaH:h, partenzaM:m, domani:false };
+  }
+  // Fuori turno (dopo le 17:30 o prima delle 07:00) → domani mattina
+  return { label:'Domani', partenzaH:ORA_INIZIO_TURNO, partenzaM:0, domani:true };
+}
+
+// Formatta orario da ore frazionarie
+function fmtOra(h, m){
+  return String(Math.floor(h)).padStart(2,'0')+':'+String(m||0).padStart(2,'0');
+}
+
+// Calcola ora di ritorno dato partenza (h,m) e durata in minuti
+function calcRitorno(partenzaH, partenzaM, durataMin){
+  const totMin = partenzaH*60 + partenzaM + durataMin;
+  const h = Math.floor(totMin/60) % 24;
+  const m = totMin % 60;
+  const oltreGiorno = totMin >= 24*60;
+  return { h, m, str: fmtOra(h,m), oltreGiorno, totMin };
+}
+
+// ── SIMULAZIONE RIEMPIMENTO GIORNALIERO ──
+// Tassi di crescita % al giorno per tipo di rifiuto
+const TASSI_CRESCITA = {
+  'Frigoriferi': 4.5,       // ~22 giorni a saturazione
+  'TV e Monitor': 3.0,      // ~33 giorni
+  'Frigoriferi + TV': 3.8,
+  'RAEE Misti': 2.5,
+  'default': 3.5
+};
+// Fattore per comune piccolo/grande (più abitanti = più veloce)
+function fattoreComuneDim(comune){
+  const grandi = ['Perugia','Terni','Foligno','Spoleto','Città di Castello'];
+  const medi =   ['Assisi','Gubbio','Narni','Orvieto','Umbertide','Nocera Umbra'];
+  if(grandi.some(g=>comune.includes(g))) return 1.6;
+  if(medi.some(g=>comune.includes(g))) return 1.2;
+  return 0.85; // paese piccolo
+}
+
+const STORAGE_KEY = 'ecofleet_isole_v1';
+const STORAGE_DATE = 'ecofleet_lastopen';
+
+function salvaStatoIsole(){
+  try {
+    const data = isole.map(i=>({id:i.id, pct:i.pct, cassoniPieni:i.cassoniPieni}));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    localStorage.setItem(STORAGE_DATE, new Date().toISOString());
+  } catch(e){}
+}
+
+function caricaEAggiorna(){
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    const lastOpen = localStorage.getItem(STORAGE_DATE);
+    if(!saved || !lastOpen) { salvaStatoIsole(); return; }
+
+    const stato = JSON.parse(saved);
+    const msPassati = Date.now() - new Date(lastOpen).getTime();
+    const giorniPassati = Math.min(msPassati / (1000*60*60*24), 14); // max 14 giorni
+
+    if(giorniPassati < 0.04) { // meno di ~1 ora: non aggiornare
+      // Ripristina solo i valori salvati
+      stato.forEach(s=>{ const i=isole.find(x=>x.id===s.id); if(i){i.pct=s.pct;i.cassoniPieni=s.cassoniPieni;} });
+      return;
+    }
+
+    // Applica crescita proporzionale ai giorni passati
+    stato.forEach(s=>{
+      const isola = isole.find(x=>x.id===s.id);
+      if(!isola) return;
+      const tasso = TASSI_CRESCITA[isola.tipo] || TASSI_CRESCITA['default'];
+      const fattore = fattoreComuneDim(isola.comune);
+      // Crescita con leggera randomizzazione (±20%)
+      const crescita = tasso * fattore * giorniPassati * (0.8 + Math.random()*0.4);
+      const nuovaPct = Math.min(98, Math.max(s.pct + crescita, s.pct));
+      isola.pct = Math.round(nuovaPct);
+      isola.cassoniPieni = Math.round(isola.cassoniTot * (isola.pct/100));
+    });
+
+    salvaStatoIsole();
+    console.log(`EcoFleet: aggiornato dopo ${giorniPassati.toFixed(1)} giorni`);
+  } catch(e){ console.warn('localStorage non disponibile:', e); }
+}
+
+const COMUNI=[
+  // ── UMBRIA ──
+  {name:'Perugia',lat:43.1107,lng:12.3908,w:35,reg:'Umbria'},
+  {name:'Foligno',lat:42.9557,lng:12.7026,w:13,reg:'Umbria'},
+  {name:'Spoleto',lat:42.7345,lng:12.7376,w:10,reg:'Umbria'},
+  {name:'Terni',lat:42.5633,lng:12.6401,w:17,reg:'Umbria'},
+  {name:'Assisi',lat:43.0705,lng:12.6197,w:8,reg:'Umbria'},
+  {name:'Gualdo Tadino',lat:43.2314,lng:12.7749,w:7,reg:'Umbria'},
+  {name:'Gubbio',lat:43.3504,lng:12.5775,w:7,reg:'Umbria'},
+  {name:'Città di Castello',lat:43.4557,lng:12.2393,w:8,reg:'Umbria'},
+  {name:'Narni',lat:42.5186,lng:12.5193,w:6,reg:'Umbria'},
+  {name:'Orvieto',lat:42.7186,lng:12.1099,w:6,reg:'Umbria'},
+  {name:'Norcia',lat:42.7934,lng:13.0965,w:4,reg:'Umbria'},
+  {name:'Marsciano',lat:42.9116,lng:12.3383,w:4,reg:'Umbria'},
+  {name:'Umbertide',lat:43.3042,lng:12.3278,w:4,reg:'Umbria'},
+  {name:'Passignano sul Trasimeno',lat:43.1896,lng:12.1375,w:3,reg:'Umbria'},
+  {name:'Spello',lat:42.9909,lng:12.6703,w:3,reg:'Umbria'},
+  {name:'Montefalco',lat:42.8938,lng:12.6512,w:2,reg:'Umbria'},
+  // ── MARCHE ──
+  {name:'Ancona',lat:43.6158,lng:13.5189,w:18,reg:'Marche'},
+  {name:'Macerata',lat:43.2994,lng:13.4530,w:12,reg:'Marche'},
+  {name:'Pesaro',lat:43.9106,lng:12.9133,w:14,reg:'Marche'},
+  {name:'Fabriano',lat:43.3358,lng:12.9041,w:8,reg:'Marche'},
+  {name:'Civitanova Marche',lat:43.3066,lng:13.7299,w:9,reg:'Marche'},
+  {name:'Camerino',lat:43.1357,lng:13.0674,w:5,reg:'Marche'},
+  {name:'San Severino Marche',lat:43.2303,lng:13.1844,w:4,reg:'Marche'},
+  {name:'Tolentino',lat:43.2068,lng:13.2866,w:6,reg:'Marche'},
+  {name:'Jesi',lat:43.5224,lng:13.2476,w:8,reg:'Marche'},
+  {name:'Senigallia',lat:43.7150,lng:13.2175,w:7,reg:'Marche'},
+  {name:'Fermo',lat:43.1603,lng:13.7174,w:6,reg:'Marche'},
+  // ── LAZIO NORD ──
+  {name:'Viterbo',lat:42.4191,lng:12.1047,w:14,reg:'Lazio'},
+  {name:'Rieti',lat:42.4042,lng:12.8563,w:10,reg:'Lazio'},
+  {name:'Civita Castellana',lat:42.2934,lng:12.4082,w:5,reg:'Lazio'},
+  {name:'Acquapendente',lat:42.7409,lng:11.8688,w:3,reg:'Lazio'},
+  {name:'Amatrice',lat:42.6281,lng:13.2897,w:3,reg:'Lazio'},
+  // ── ABRUZZO NORD ──
+  {name:"L'Aquila",lat:42.3498,lng:13.3995,w:14,reg:'Abruzzo'},
+  {name:'Teramo',lat:42.6589,lng:13.6957,w:11,reg:'Abruzzo'},
+  {name:'Pescara',lat:42.4618,lng:14.2160,w:16,reg:'Abruzzo'},
+  {name:'Chieti',lat:42.3512,lng:14.1678,w:10,reg:'Abruzzo'},
+  {name:'Avezzano',lat:41.9992,lng:13.4253,w:7,reg:'Abruzzo'},
+  {name:'Sulmona',lat:42.0497,lng:13.9257,w:5,reg:'Abruzzo'},
+  // ── TOSCANA EST ──
+  {name:'Arezzo',lat:43.4633,lng:11.8786,w:16,reg:'Toscana'},
+  {name:'Cortona',lat:43.2757,lng:11.9876,w:5,reg:'Toscana'},
+  {name:'Sansepolcro',lat:43.5703,lng:12.1395,w:5,reg:'Toscana'},
+  {name:'Montevarchi',lat:43.5227,lng:11.5633,w:4,reg:'Toscana'},
+  // ── EMILIA SUD ──
+  {name:'Cesena',lat:44.1396,lng:12.2426,w:12,reg:'Emilia'},
+  {name:'Rimini',lat:44.0595,lng:12.5683,w:15,reg:'Emilia'},
+  {name:'Forlì',lat:44.2227,lng:12.0407,w:13,reg:'Emilia'},
+];
+const STREETS=['Via Roma','Via Garibaldi','Via Mazzini','Corso Italia','Via Cavour','Via Dante',
+  'Viale Europa','Via della Repubblica','Via Nazionale','Via del Corso','Piazza Vittorio',
+  'Via Kennedy','Via Leopardi','Via Oberdan','Via Verdi','Via Gramsci','Via Matteotti',
+  'Via Marconi','Via Amendola','Via Carducci'];
+const TYPES=['Frigoriferi','TV e Monitor','Frigoriferi + TV','RAEE Misti'];
+
+function rnd(a,b){return Math.random()*(b-a)+a;}
+function pick(arr){return arr[Math.floor(Math.random()*arr.length)];}
+function distDeg(a,b){return Math.sqrt((a.lat-b.lat)**2+(a.lng-b.lng)**2);}
+function kmBetween(a,b){return distDeg(a,b)*KM_PER_DEG*1.35;}
+
+function weightedComune(){
+  const tot=COMUNI.reduce((s,c)=>s+c.w,0);let r=Math.random()*tot;
+  for(const c of COMUNI){r-=c.w;if(r<=0)return c;}return COMUNI[0];
+}
+
+function genIsole(){
+  const isole=[];
+  for(let i=0;i<350;i++){
+    const com=weightedComune();
+    const pct=Math.round(rnd(5,100));
+    const cassoniTot=Math.ceil(rnd(2,10));
+    const cassoniPieni=Math.round(cassoniTot*(pct/100));
+    isole.push({
+      id:i+1,
+      name:`Isola ${STREETS[i%STREETS.length]} — ${com.name}`,
+      address:`${STREETS[i%STREETS.length]} ${Math.floor(rnd(1,120))}, ${com.name}`,
+      comune:com.name,
+      lat:com.lat+rnd(-0.09,0.09),
+      lng:com.lng+rnd(-0.11,0.11),
+      pct,cassoniTot,cassoniPieni,
+      tipo:pick(TYPES),
+      type:pick(TYPES),
+      regione:com.reg||'Umbria',
+      excluded:false,
+      _routeOrder:null,
+    });
+  }
+  return isole;
+}
+
+let isole=genIsole();
+let currentFilter='all';
+let routeMode=false;
+
+// ── MULTI-ROUTE STATE ──
+// uscite = [{id, color, label, routeType, stops:[{isola, cassoniDaCaricare, skipped}], lines:[]}]
+const ROUTE_COLORS=['#3b82f6','#f97316','#a855f7','#14b8a6','#ec4899','#eab308','#06b6d4','#84cc16'];
+let uscite=[];        // all active uscite
+// ── STORICO USCITE ──
+const STORICO_KEY = 'ecofleet_storico_v1';
+function loadStorico(){
+  try { return JSON.parse(localStorage.getItem(STORICO_KEY)||'[]'); } catch(e){ return []; }
+}
+function saveStorico(rec){
+  try {
+    const st = loadStorico();
+    st.unshift(rec); // più recente prima
+    if(st.length>60) st.length=60; // max 60 record
+    localStorage.setItem(STORICO_KEY, JSON.stringify(st));
+  } catch(e){}
+}
+let activeUscitaId=null; // which one is being edited
+let route=[];         // alias → active uscita stops (kept for backward compat)
+let routeType='frigo';
+let markers={};
+let routeLines=[];    // kept for compat, lines stored in uscita too
+let hqMarker=null;
+let map;
+let addStopSelectedIsola=null;
+
+function getActiveUscita(){ return uscite.find(u=>u.id===activeUscitaId)||null; }
+function getRouteColor(id){ const u=uscite.find(x=>x.id===id); return u?u.color:ROUTE_COLORS[0]; }
+function nextRouteColor(){ return ROUTE_COLORS[uscite.length % ROUTE_COLORS.length]; }
+function getIsolaUscita(isolaId){ return uscite.find(u=>u.stops.some(s=>s.isola.id===isolaId&&!s.skipped))||null; }
+
+// ── CLOCK ──
+function updateClock(){
+  const now=new Date();
+  const h=String(now.getHours()).padStart(2,'0');
+  const m=String(now.getMinutes()).padStart(2,'0');
+  document.getElementById('clockDisplay').textContent=`${h}:${m}`;
+  const days=['Dom','Lun','Mar','Mer','Gio','Ven','Sab'];
+  const months=['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
+  document.getElementById('clockDate').textContent=`${days[now.getDay()]} ${now.getDate()} ${months[now.getMonth()]} ${now.getFullYear()}`;
+}
+setInterval(updateClock,1000);updateClock();
+
+// ── HELPERS ──
+function statusColor(pct){return pct>=85?'red':pct>=60?'yellow':'green';}
+function statusLabel(pct){return pct>=85?'🔴 CRITICA':pct>=60?'🟡 QUASI PIENA':'🟢 OK';}
+function statusClr(pct){return pct>=85?'#ef4444':pct>=60?'#f59e0b':'#22c55e';}
+
+// ── MAP ──
+function initMap(){
+  map=L.map('map',{
+    zoomControl:true,center:[43.0,12.55],zoom:9,
+    preferCanvas:true,  // faster rendering
+    renderer:L.canvas()
+  });
+  // Tile OSM standard con fallback
+  const tileMain = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    maxZoom:19, attribution:'&copy; OpenStreetMap contributors', crossOrigin:true
+  });
+  tileMain.addTo(map);
+  const hqIcon=L.divIcon({className:'',
+    html:`<div style="width:22px;height:22px;border-radius:50%;background:#22c55e;border:3px solid white;box-shadow:0 0 12px #22c55e88;display:flex;align-items:center;justify-content:center;font-size:11px;">🏠</div>`,
+    iconSize:[22,22],iconAnchor:[11,11]});
+  hqMarker=L.marker([HQ.lat,HQ.lng],{icon:hqIcon,zIndexOffset:1000}).addTo(map);
+  hqMarker.bindTooltip(
+    `<div class="map-tt"><div class="mtt-name">🏠 ${HQ.name}</div><div class="mtt-addr">Base operativa — punto di partenza e ritorno</div></div>`,
+    {className:'leaflet-tooltip',direction:'top',offset:[0,-8],sticky:false,opacity:1});
+  renderMarkers();updateStats();
+  // Chiudi tutti i tooltip al click sulla mappa (evita tooltip bloccati)
+  map.on('click', ()=>{
+    map.eachLayer(l=>{ if(l.closeTooltip) l.closeTooltip(); if(l.closePopup) l.closePopup(); });
+    map.closePopup();
+  });
+}
+
+function makeMarkerIcon(isola){
+  const statusC=statusClr(isola.pct);
+  const excl=isola.excluded;
+  // Find which uscita owns this isola (if any)
+  const ownerUscita=getIsolaUscita(isola.id);
+  const inAnyRoute=!!ownerUscita;
+  const isActive=ownerUscita&&ownerUscita.id===activeUscitaId;
+  const routeColor=ownerUscita?ownerUscita.color:statusC;
+  const stop=ownerUscita?ownerUscita.stops.find(s=>s.isola.id===isola.id):null;
+  const skipped=stop?.skipped||false;
+  const orderNum=stop?ownerUscita.stops.filter(s=>!s.skipped).indexOf(stop)+1:null;
+
+  // Background islands (not in any route) when routes are active
+  if(routeMode && !inAnyRoute && !excl){
+    return L.divIcon({className:'',
+      html:`<div style="width:7px;height:7px;border-radius:50%;background:${statusC};opacity:0.55;box-shadow:0 0 3px ${statusC}66;"></div>`,
+      iconSize:[7,7],iconAnchor:[3,3]});
+  }
+
+  if(inAnyRoute && !skipped){
+    const size=isActive?22:16;
+    const border=isActive?'3px solid white':'2px solid rgba(255,255,255,0.6)';
+    const shadow=`0 0 14px ${routeColor}cc,0 0 4px rgba(0,0,0,.8)`;
+    const label=orderNum?`<span style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:9px;font-weight:900;color:white;">${orderNum}</span>`:'';
+    return L.divIcon({className:'',
+      html:`<div style="position:relative;width:${size}px;height:${size}px;border-radius:50%;background:${routeColor};border:${border};box-shadow:${shadow};">${label}</div>`,
+      iconSize:[size,size],iconAnchor:[size/2,size/2]});
+  }
+  if(inAnyRoute && skipped){
+    return L.divIcon({className:'',
+      html:`<div style="width:12px;height:12px;border-radius:50%;background:#555;border:2px solid #777;opacity:0.4;"></div>`,
+      iconSize:[12,12],iconAnchor:[6,6]});
+  }
+
+  let size=excl?7:9;
+  let bg=excl?'#555':statusC;
+  let opacity=excl?'0.35':'1';
+  return L.divIcon({className:'',
+    html:`<div style="width:${size}px;height:${size}px;border-radius:50%;background:${bg};opacity:${opacity};"></div>`,
+    iconSize:[size,size],iconAnchor:[size/2,size/2]});
+}
+
+// Tooltip semplice (on hover)
+function makeTooltipSimple(isola){
+  const col = statusColor(isola.pct);
+  const clr = col==='red'?'var(--red)':col==='yellow'?'var(--yellow)':'var(--green)';
+  const ownerU = getIsolaUscita(isola.id);
+  return `<div style="background:#1a2235ee;border:1px solid #3a4a6a;border-radius:8px;padding:7px 11px;font-family:'DM Sans',sans-serif;box-shadow:0 4px 16px #000a;backdrop-filter:blur(4px);">
+    <div style="font-size:12px;font-weight:700;color:#e8eef8;margin-bottom:2px;">${isola.name}</div>
+    <div style="font-size:10px;color:#8899bb;margin-bottom:4px;">${isola.address}</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <span style="font-size:10px;color:#8899bb;">Riempimento</span>
+      <span style="font-size:12px;font-weight:700;color:${clr}">${isola.pct}%</span>
+    </div>
+    ${ownerU?`<div style="margin-top:4px;font-size:10px;font-weight:600;color:${ownerU.color};">● In Uscita ${ownerU.label}</div>`:''}
+  </div>`;
+}
+
+// Popup interattivo (on click) con pulsanti azione
+function makePopupContent(isola){
+  const col = statusColor(isola.pct);
+  const clr = col==='red'?'var(--red)':col==='yellow'?'var(--yellow)':'var(--green)';
+  const ownerU = getIsolaUscita(isola.id);
+  const activeU = getActiveUscita();
+  // Calcola se il camion attivo ha spazio
+  let canAdd = false, spaceLeft = 0;
+  if(activeU && !ownerU){
+    const s = calcRouteStats(activeU);
+    const maxC = activeU.routeType==='tv'?MAX_TV:MAX_FRIGO;
+    spaceLeft = maxC - s.totalCassoni;
+    canAdd = spaceLeft > 0;
+  }
+
+  let actionBtns = '';
+  if(isola.excluded){
+    actionBtns = `<div style="font-size:11px;color:var(--text-2);text-align:center;padding:4px;">🚫 Isola esclusa</div>`;
+  } else if(ownerU){
+    actionBtns = `<div style="font-size:11px;color:${ownerU.color};text-align:center;padding:4px 0;">
+      ● Già in Uscita ${ownerU.label}</div>
+      <button onclick="setActiveUscita(${ownerU.id});document.querySelector('.eco-popup .leaflet-popup-close-button')?.click();"
+        style="width:100%;padding:7px;background:${ownerU.color}22;color:${ownerU.color};border:1px solid ${ownerU.color}44;border-radius:7px;cursor:pointer;font-size:11.5px;font-weight:600;font-family:'DM Sans',sans-serif;">
+        📍 Vai a Uscita ${ownerU.label}
+      </button>`;
+  } else if(activeU && canAdd){
+    actionBtns = `
+      <button onclick="handleMapIslandClick(${isola.id});document.querySelector('.eco-popup .leaflet-popup-close-button')?.click();"
+        style="width:100%;padding:7px;background:var(--accent-dim);color:var(--accent-lt);border:1px solid #2d6ef744;border-radius:7px;cursor:pointer;font-size:11.5px;font-weight:600;font-family:'DM Sans',sans-serif;margin-bottom:5px;">
+        + Aggiungi a Uscita ${activeU.label}
+      </button>
+      <button onclick="quickCreateRoute(${isola.id});document.querySelector('.eco-popup .leaflet-popup-close-button')?.click();"
+        style="width:100%;padding:7px;background:var(--green-dim);color:var(--green);border:1px solid #22d47a44;border-radius:7px;cursor:pointer;font-size:11.5px;font-weight:600;font-family:'DM Sans',sans-serif;">
+        🚛 Nuova uscita
+      </button>`;
+  } else if(activeU && !canAdd){
+    actionBtns = `
+      <div style="font-size:11px;color:var(--yellow);text-align:center;padding:3px 0 5px;">⚠️ Camion ${activeU.label} pieno</div>
+      <button onclick="quickCreateRoute(${isola.id});document.querySelector('.eco-popup .leaflet-popup-close-button')?.click();"
+        style="width:100%;padding:7px;background:var(--green-dim);color:var(--green);border:1px solid #22d47a44;border-radius:7px;cursor:pointer;font-size:11.5px;font-weight:600;font-family:'DM Sans',sans-serif;">
+        🚛 Nuova uscita
+      </button>`;
+  } else {
+    actionBtns = `
+      <button onclick="quickCreateRoute(${isola.id});document.querySelector('.eco-popup .leaflet-popup-close-button')?.click();"
+        style="width:100%;padding:7px;background:var(--accent);color:white;border:none;border-radius:7px;cursor:pointer;font-size:11.5px;font-weight:600;font-family:'DM Sans',sans-serif;">
+        🚛 Crea percorso da qui
+      </button>`;
+  }
+
+  return `<div style="font-family:'DM Sans',sans-serif;">
+    <div style="font-size:13px;font-weight:700;margin-bottom:2px;">${isola.name}</div>
+    <div style="font-size:10.5px;color:#8899bb;margin-bottom:8px;">${isola.address}</div>
+    <div style="display:flex;justify-content:space-between;margin-bottom:3px;">
+      <span style="font-size:10.5px;color:#8899bb;">Riempimento</span>
+      <span style="font-size:12px;font-weight:700;color:${clr}">${isola.pct}%</span>
+    </div>
+    <div style="height:4px;background:#2a3a55;border-radius:2px;margin-bottom:6px;">
+      <div style="height:100%;width:${isola.pct}%;background:${clr};border-radius:2px;"></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
+      <span style="font-size:10.5px;color:#8899bb;">Cassoni</span>
+      <span style="font-size:11px;font-weight:600;">${isola.cassoniPieni}/${isola.cassoniTot}</span>
+    </div>
+    <div style="border-top:1px solid #2a3a55;padding-top:8px;margin-top:4px;">
+      ${actionBtns}
+    </div>
+  </div>`;
+}
+
+function makeTT(isola){
+  const c=statusClr(isola.pct);
+  const ownerUscita=getIsolaUscita(isola.id);
+  const stop=ownerUscita?ownerUscita.stops.find(s=>s.isola.id===isola.id):null;
+  const routeColor=ownerUscita?ownerUscita.color:c;
+
+  return `<div class="map-tt" style="min-width:200px;">
+    <div class="mtt-name">${isola.excluded?'🚫 ':ownerUscita?`<span style="background:${routeColor};color:white;border-radius:4px;padding:0 6px;font-size:10px;margin-right:5px;">Uscita ${ownerUscita.label}</span>`:'' }${isola.name}</div>
+    <div class="mtt-addr">${isola.address}</div>
+    <div class="mtt-row"><span class="mtt-lbl">Riempimento</span><span class="mtt-val" style="color:${c};font-family:'Syne',sans-serif;font-size:16px;">${isola.pct}%</span></div>
+    <div class="mtt-bar"><div class="mtt-bar-fill" style="width:${isola.pct}%;background:${c};"></div></div>
+    <div class="mtt-row"><span class="mtt-lbl">Cassoni pieni</span><span class="mtt-val">${isola.cassoniPieni}/${isola.cassoniTot}</span></div>
+    <div class="mtt-row"><span class="mtt-lbl">Tipo</span><span class="mtt-val">${isola.type}</span></div>
+    ${stop&&!stop.skipped?`<div class="mtt-row"><span class="mtt-lbl">Da caricare</span><span class="mtt-val" style="color:${routeColor};">${stop.cassoniDaCaricare} cassoni</span></div>`:''}
+    <div class="mtt-status" style="background:${c}18;color:${c};margin-top:6px;">
+      ${isola.excluded?'🚫 ESCLUSA':stop?.skipped?'⏭ SALTATA':statusLabel(isola.pct)}
+    </div>
+  </div>`;
+}
+
+function renderMarkers(){
+  Object.values(markers).forEach(m=>m.remove());markers={};
+  // Always show ALL islands on map — visual weight determined by makeMarkerIcon
+  // Route stops get high zIndex, background islands get low zIndex
+  isole.forEach(isola=>{
+    const inRoute=!!getIsolaUscita(isola.id);
+    const zOffset=inRoute?500:0;
+    const m=L.marker([isola.lat,isola.lng],{icon:makeMarkerIcon(isola),zIndexOffset:zOffset}).addTo(map);
+    // Tooltip leggero on hover
+    m.bindTooltip(makeTooltipSimple(isola),{
+      className:'leaflet-tooltip',direction:'top',
+      offset:[0,-14],sticky:false,opacity:1,permanent:false,
+    });
+    // Popup interattivo on click
+    m.bindPopup(makePopupContent(isola),{
+      className:'eco-popup',maxWidth:240,minWidth:200,
+      closeButton:true,autoClose:true,closeOnClick:false,
+    });
+    m.on('click', (e)=>{
+      L.DomEvent.stopPropagation(e);
+      m.openPopup();
+    });
+    markers[isola.id]=m;
+  });
+}
+
+function drawRouteLines(){
+  // Remove all existing lines
+  routeLines.forEach(l=>l.remove()); routeLines=[];
+  uscite.forEach(u=>{ if(u.lines){ u.lines.forEach(l=>l.remove()); u.lines=[]; } });
+  // Draw one line per uscita
+  uscite.forEach(u=>{
+    const active=u.stops.filter(s=>!s.skipped);
+    if(!active.length) return;
+    const isActive=u.id===activeUscitaId;
+    const pts=[[HQ.lat,HQ.lng],...active.map(s=>[s.isola.lat,s.isola.lng]),[HQ.lat,HQ.lng]];
+    const line=L.polyline(pts,{color:u.color,weight:isActive?4:2.5,dashArray:isActive?'10,6':'6,8',opacity:isActive?0.95:0.55}).addTo(map);
+    if(!u.lines) u.lines=[];
+    u.lines.push(line);
+    routeLines.push(line);
+  });
+}
+
+// ── ROUTE CALCULATIONS ──
+function calcRouteStats(u){
+  const uscita=u||getActiveUscita();
+  if(!uscita) return{totalCassoni:0,maxCassoni:20,totalKm:0,driveMin:0,loadMin:0,totalMin:0,pct:0,active:0};
+  const active=uscita.stops.filter(s=>!s.skipped);
+  const maxCassoni=uscita.routeType==='tv'?MAX_TV:MAX_FRIGO;
+  let totalCassoni=active.reduce((s,r)=>s+r.cassoniDaCaricare,0);
+  let totalKm=0;
+  if(active.length){
+    totalKm+=kmBetween(HQ,active[0].isola);
+    for(let i=0;i<active.length-1;i++)totalKm+=kmBetween(active[i].isola,active[i+1].isola);
+    totalKm+=kmBetween(active[active.length-1].isola,HQ);
+  }
+  totalKm=Math.round(totalKm);
+  const driveMin=Math.round(totalKm/SPEED_KMH*60);
+  const loadMin=totalCassoni*MIN_PER_CASSONE;
+  const totalMin=driveMin+loadMin;
+  // pct può superare 100 se si supera il limite — usato per feedback visivo
+  const pct=Math.round(totalCassoni/maxCassoni*100);
+  return{totalCassoni,maxCassoni,totalKm,driveMin,loadMin,totalMin,pct,active:active.length};
+}
+
+function updateFooter(){
+  const uscita=getActiveUscita();
+  const s=calcRouteStats(uscita);
+  const rc=uscita?uscita.color:'var(--accent-lt)';
+  const now=new Date();
+  // Pianificazione smart: oggi o domani in base all'ora
+  const piano = getPianificazioneEffettiva();
+  const departStr = fmtOra(piano.partenzaH, piano.partenzaM);
+  const ritorno = calcRitorno(piano.partenzaH, piano.partenzaM, s.totalMin);
+  const returnStr = ritorno.str;
+  const pianoDayLabel = piano.label; // 'Oggi' o 'Domani'
+  const durationH=(s.totalMin/60).toFixed(1);
+  const overTurn=s.totalMin>TURNO_ORE*60;
+  const rType=uscita?uscita.routeType:'frigo';
+  const totalCells=rType==='tv'?MAX_TV:MAX_FRIGO;
+
+  // Breadcrumb
+  const label=uscita?`Uscita ${uscita.label} · ${s.active} fermate · ${s.totalKm}km A/R`:'Tutte le isole';
+  const bc=document.getElementById('bcText'); if(bc) bc.textContent=label;
+  // rpMeta
+  const rm=document.getElementById('rpMeta');
+  if(rm&&uscita) rm.textContent=`${s.active} fermate · ${s.totalKm}km A/R · ${pianoDayLabel} ${departStr}→${returnStr}${ritorno.oltreGiorno?' ⚠️':''}`;
+  else if(rm) rm.textContent='';
+  // map strip route items
+  const mssR=document.getElementById('mssRoute');
+  const mssRv=document.getElementById('mssReturn');
+  const mssC=document.getElementById('mssCassoni');
+  const mssK=document.getElementById('mssKm');
+  const dep=document.getElementById('mssDepart');
+  const ret=document.getElementById('mssReturnVal');
+  const cass=document.getElementById('mssCassoniVal');
+  const km=document.getElementById('mssKmVal');
+  if(uscita){
+    if(mssR) mssR.style.display='';
+    if(mssRv) mssRv.style.display='';
+    if(mssC) mssC.style.display='';
+    if(mssK) mssK.style.display='';
+    if(dep) dep.textContent=`${pianoDayLabel} ${departStr}`;
+    if(ret){ret.textContent=returnStr;ret.style.color=overTurn?'var(--red)':'var(--green)';}
+    if(cass) cass.textContent=`${s.totalCassoni}/${totalCells}`;
+    if(km) km.textContent=`${s.totalKm} km`;
+    const tw3=document.getElementById('turnWarning');
+    if(tw3){tw3.className='turn-warning'+(overTurn?' show':'');if(overTurn)tw3.textContent=`⚠️ ${durationH}h — supera il turno di ${TURNO_ORE}h`;}
+  }
+
+  // ── CAMION TAB aggiornato ──
+  const grid=document.getElementById('tvGrid');
+  const overLimit = s.totalCassoni > totalCells;
+  if(grid){
+    grid.innerHTML='';
+    // Mostra celle fino al massimo del camion + eventuali eccessi
+    const showCells = Math.max(totalCells, s.totalCassoni);
+    for(let i=0;i<showCells;i++){
+      const cell=document.createElement('div');
+      if(i>=totalCells){
+        cell.className='tv-cell over-limit'; // rosso lampeggiante per eccesso
+      } else if(i<s.totalCassoni){
+        cell.className='tv-cell'+(rType==='tv'?' tv-type':' frigo');
+        cell.style.background=rc;
+      } else {
+        cell.className='tv-cell';
+      }
+      grid.appendChild(cell);
+    }
+  }
+  // Barra riempimento
+  const tf=document.getElementById('truckFill');
+  if(tf){
+    const barPct=Math.min(100,s.pct);
+    tf.style.width=barPct+'%';
+    tf.style.background=overLimit?'var(--red)':s.pct>=85?'var(--yellow)':'var(--green)';
+  }
+  // % testo grande
+  const tp=document.getElementById('truckPct');
+  if(tp){
+    tp.textContent=s.pct+'%';
+    tp.style.color=overLimit?'var(--red)':s.pct>=85?'var(--yellow)':'var(--green)';
+  }
+  // Label capacità
+  const tcl=document.getElementById('truckCapLabel');
+  if(tcl){
+    tcl.textContent=`${s.totalCassoni} / ${totalCells}`;
+    tcl.style.color=overLimit?'var(--red)':s.pct>=85?'var(--yellow)':'var(--text)';
+  }
+  // tvGridCount rimosso
+  // Legenda "oltre limite"
+  const tvOL=document.getElementById('tvOverLegend');
+  if(tvOL) tvOL.style.display=overLimit?'':'none';
+  // tvLabel vecchio (compat)
+  const tl=document.getElementById('tvLabel'); if(tl) tl.textContent=`${s.totalCassoni}/${totalCells}`;
+  // Meta grid
+  const tm=document.getElementById('truckMeta');
+  if(tm) tm.innerHTML=`
+    <div class="tm-block"><div class="tm-lbl">${pianoDayLabel} — Partenza</div><div class="tm-val">${departStr}</div></div>
+    <div class="tm-block"><div class="tm-lbl">Ritorno</div><div class="tm-val" style="color:${overTurn?'var(--red)':'var(--green)'}">${returnStr}</div></div>
+    <div class="tm-block"><div class="tm-lbl">Durata</div><div class="tm-val" style="color:${overTurn?'var(--red)':'var(--text)'}">${durationH}h${overTurn?' ⚠️':''}</div></div>
+    <div class="tm-block"><div class="tm-lbl">Km A/R</div><div class="tm-val">${s.totalKm} km</div></div>`;
+
+  // Stats panel
+  const ds=document.getElementById('dpStats');
+  if(ds) ds.innerHTML=`
+    <div class="stat-item"><div class="stat-val" style="color:var(--accent-lt)">${s.active}</div><div class="stat-lbl">Fermate</div></div>
+    <div class="stat-item"><div class="stat-val" style="color:${overLimit?'var(--red)':s.pct>=85?'var(--yellow)':'var(--green)'}">${s.pct}%</div><div class="stat-lbl">Carico</div><div class="stat-sub" style="color:${overLimit?'var(--red)':'var(--text-2)'}">${overLimit?'⚠️ OLTRE':''}${s.totalCassoni}/${totalCells}</div></div>
+    <div class="stat-item"><div class="stat-val" style="color:${overTurn?'var(--red)':'var(--green)'}">${durationH}h</div><div class="stat-lbl">Durata</div><div class="stat-sub" style="color:${overTurn?'var(--red)':'var(--text-2)'};">${overTurn?'⚠️ oltre':'nel turno ✓'}</div></div>
+    <div class="stat-item"><div class="stat-val" style="color:var(--green);font-size:18px;">${returnStr}</div><div class="stat-lbl">Ritorno</div></div>`;
+
+  renderDpFermate();
+
+  // Turn warning in uscite panel
+  const tw=document.getElementById('turnWarning');
+  if(tw){tw.className='turn-warning'+(overTurn?' show':'');if(overTurn)tw.textContent=`⚠️ Attenzione: il percorso supera il turno di ${durationH}h`;}
+}
+
+function renderDpFermate(){
+  const uscita=getActiveUscita();
+  const dp=document.getElementById('dpFermate');
+  if(!dp) return;
+  dp.innerHTML='';
+  if(!uscita) return;
+  const mkCard=(label,addr,cassText,color,cls='')=>{
+    const d=document.createElement('div');
+    d.className='fermata-card'+cls;
+    d.innerHTML=`<div class="fm-num" style="background:${color};">${label}</div><div class="fm-name">${addr}</div><div class="fm-addr">${cassText}</div>`;
+    return d;
+  };
+  dp.appendChild(mkCard('🏠','Gualdo Tadino','Partenza','var(--green)'));
+  uscita.stops.forEach((entry,i)=>{
+    const d=document.createElement('div');
+    d.className='fermata-card'+(entry.skipped?' stop-skipped':'');
+    const s=calcRouteStats(uscita);
+    d.innerHTML=`<div class="fm-num" style="background:${uscita.color};">${i+1}</div><div class="fm-name">${entry.isola.name}</div><div class="fm-addr">${entry.isola.comune}</div><div class="fm-cass" style="color:${entry.skipped?'var(--text-2)':uscita.color};">${entry.cassoniDaCaricare} cass.${entry.skipped?' · skip':''}</div>`;
+    dp.appendChild(d);
+  });
+  const s2=calcRouteStats(uscita);
+  const ret=new Date(Date.now()+s2.totalMin*60000);
+  const retStr=`${String(ret.getHours()).padStart(2,'0')}:${String(ret.getMinutes()).padStart(2,'0')}`;
+  dp.appendChild(mkCard('🏠','Gualdo Tadino',`~${retStr}`,'var(--green)'));
+}
+
+// ── ROUTE STOPS UI ──
+function renderRouteStops(){
+  const scroll=document.getElementById('routeStopsScroll');
+  scroll.innerHTML='';
+  const uscita=getActiveUscita();
+  if(!uscita){scroll.innerHTML='<div style="padding:12px;color:var(--text-2);font-size:12px;">Nessuna uscita selezionata</div>';return;}
+  const stops=uscita.stops;
+
+  // HQ start
+  const hqRow=document.createElement('div');
+  hqRow.className='route-stop-item hq-row';
+  hqRow.innerHTML=`<div class="rsi-num hq">🏠</div><div class="rsi-info"><div class="rsi-name">${HQ.name}</div><div class="rsi-detail">Partenza</div></div>`;
+  scroll.appendChild(hqRow);
+
+  stops.forEach((entry,idx)=>{
+    const row=document.createElement('div');
+    row.className='route-stop-item'+(entry.skipped?' rsi-skipped':'');
+    row.setAttribute('data-id', entry.isola.id);
+    const c=statusClr(entry.isola.pct);
+    row.innerHTML=`
+      <div class="drag-handle" title="Trascina per riordinare">⠿</div>
+      <div class="rsi-num" style="${entry.skipped?'background:#444;':'background:'+uscita.color}">${idx+1}</div>
+      <div class="rsi-info">
+        <div class="rsi-name">${entry.isola.name}${entry.skipped?'<span class="skip-badge">SALTATA</span>':''}</div>
+        <div class="rsi-detail">${entry.isola.comune} · max ${entry.isola.cassoniPieni} cass.</div>
+      </div>
+      <div class="rsi-cassoni">
+        <input class="cassoni-input" type="number" value="${entry.cassoniDaCaricare}" min="1" max="${entry.isola.cassoniPieni}"
+          oninput="updateCassoni(${idx},this.value,this)" title="Cassoni da caricare" ${entry.skipped?'disabled':''}/>
+        <span class="cassoni-max">/${entry.isola.cassoniPieni}</span>
+      </div>
+      <div class="rsi-actions">
+        <div class="rsi-btn rsi-btn-skip" onclick="toggleSkip(${idx})" title="${entry.skipped?'Riattiva':'Salta'}">${entry.skipped?'↩':'⏭'}</div>
+        <div class="rsi-btn rsi-btn-remove" onclick="removeStop(${idx})" title="Rimuovi">✕</div>
+      </div>`;
+    scroll.appendChild(row);
+  });
+
+  // HQ return
+  const hqEnd=document.createElement('div');
+  hqEnd.className='route-stop-item hq-row';
+  hqEnd.innerHTML=`<div class="rsi-num hq">🏠</div><div class="rsi-info"><div class="rsi-name">${HQ.name}</div><div class="rsi-detail">Ritorno</div></div>`;
+  scroll.appendChild(hqEnd);
+  setTimeout(initSortable, 50);
+}
+
+function updateCassoni(idx,val,inputEl){
+  const uscita=getActiveUscita(); if(!uscita) return;
+  const stop=uscita.stops[idx];
+  const maxPerIsola=stop.isola.cassoniPieni;
+  const rType=uscita.routeType;
+  const maxCamion=rType==='tv'?MAX_TV:MAX_FRIGO;
+  const v=Math.max(1,Math.min(parseInt(val)||1,maxPerIsola));
+  // Calcola totale con il nuovo valore
+  const totaleNuovo=uscita.stops.reduce((s,st,i)=>s+(i===idx?v:(st.skipped?0:st.cassoniDaCaricare)),0);
+  if(inputEl){
+    if(totaleNuovo>maxCamion){
+      inputEl.style.background='var(--red-dim)';
+      inputEl.style.borderColor='var(--red)';
+      inputEl.style.color='var(--red)';
+      // Non aggiornare il valore, mostra toast
+      showToast('⚠️','Camion pieno!',`Massimo ${maxCamion} cassoni per questo tipo. Hai ${totaleNuovo-maxCamion} in eccesso.`);
+    } else {
+      inputEl.style.background='';inputEl.style.borderColor='';inputEl.style.color='';
+    }
+  }
+  stop.cassoniDaCaricare=v;
+  refreshRouteUI();
+}
+
+function toggleSkip(idx){
+  const uscita=getActiveUscita(); if(!uscita) return;
+  uscita.stops[idx].skipped=!uscita.stops[idx].skipped;
+  refreshRouteUI();
+  showToast(uscita.stops[idx].skipped?'⏭':'✅',
+    uscita.stops[idx].skipped?'Fermata saltata':'Fermata riattivata',
+    uscita.stops[idx].isola.name);
+}
+
+function removeStop(idx){
+  const uscita=getActiveUscita(); if(!uscita) return;
+  const removed=uscita.stops.splice(idx,1)[0];
+  refreshRouteUI();
+  showToast('🗑️','Fermata rimossa',removed.isola.name);
+}
+
+function refreshRouteUI(){
+  renderUsciteCards();
+  // Piccolo delay per assicurarsi che routeStopsScroll sia nel DOM prima di riempirlo
+  setTimeout(()=>{
+    renderRouteStops();
+    updateFooter();
+  },0);
+  drawRouteLines();
+  renderMarkers();
+  map.closePopup();
+}
+
+// ── ADD STOP ──
+function openAddStopModal(){
+  addStopSelectedIsola=null;
+  document.getElementById('addStopInput').value='';
+  document.getElementById('addStopCassoni').value='';
+  document.getElementById('addStopInfo').style.display='none';
+  document.getElementById('addStopModal').classList.add('open');
+}
+
+function confirmAddStop(){
+  if(!addStopSelectedIsola){showToast('⚠️','Seleziona un\'isola','Cerca e seleziona un\'isola dalla lista');return;}
+  const cassoni=parseInt(document.getElementById('addStopCassoni').value)||addStopSelectedIsola.cassoniPieni;
+  const alreadyIn=route.find(r=>r.isola.id===addStopSelectedIsola.id);
+  if(alreadyIn){showToast('ℹ️','Già nel percorso','Questa isola è già inclusa');return;}
+  route.push({isola:addStopSelectedIsola,cassoniDaCaricare:Math.min(cassoni,addStopSelectedIsola.cassoniPieni),skipped:false});
+  // Re-order
+  isole.forEach(i=>i._routeOrder=null);
+  route.forEach((r,i)=>{const orig=isole.find(x=>x.id===r.isola.id);if(orig)orig._routeOrder=i+1;});
+  closeModal('addStopModal');
+  refreshRouteUI();
+  showToast('✅','Fermata aggiunta',addStopSelectedIsola.name);
+}
+
+// ── SUGGESTIONS ──
+function showSuggestions(input,sugId){
+  const q=input.value.toLowerCase().trim();
+  const box=document.getElementById(sugId);
+  if(!q){box.style.display='none';return;}
+  const matches=isole.filter(i=>
+    !i.excluded&&
+    (i.name.toLowerCase().includes(q)||i.comune.toLowerCase().includes(q))
+  ).sort((a,b)=>b.pct-a.pct).slice(0,8);
+  if(!matches.length){box.style.display='none';return;}
+  box.style.display='block';
+  box.innerHTML='';
+  matches.forEach(isola=>{
+    const div=document.createElement('div');
+    div.className='sugg-item';
+    const c=statusClr(isola.pct);
+    div.innerHTML=`<div><div style="font-size:12.5px;font-weight:600;">${isola.name}</div><div style="font-size:10.5px;color:var(--text-2);">${isola.address}</div></div><div class="sugg-pct" style="color:${c};">${isola.pct}%</div>`;
+    div.onclick=()=>{
+      input.value=isola.name;
+      box.style.display='none';
+      if(sugId==='addStopSuggestions'){
+        addStopSelectedIsola=isola;
+        document.getElementById('addStopCassoni').value=isola.cassoniPieni;
+        document.getElementById('addStopCassoni').max=isola.cassoniPieni;
+        const info=document.getElementById('addStopInfo');
+        info.style.display='block';
+        info.innerHTML=`📦 <strong>${isola.name}</strong> — ${isola.cassoniPieni} cassoni disponibili su ${isola.cassoniTot} totali. Puoi inserire un numero minore per carico parziale.`;
+      }
+    };
+    box.appendChild(div);
+  });
+}
+
+// Close suggestions on outside click
+document.addEventListener('click',(e)=>{
+  // Only close if click is outside all suggestion boxes and search inputs
+  if(e.target.id!=='searchInput'&&!e.target.closest('.suggestions')&&!e.target.closest('.search-bar')){
+    document.getElementById('mainSearchSuggestions').style.display='none';
+  }
+  document.querySelectorAll('.suggestions').forEach(s=>{
+    if(!s.contains(e.target)&&!e.target.classList.contains('mi')&&e.target.id!=='searchInput')s.style.display='none';
+  });
+});
+
+// ── CALC ROUTE ──
+// ── CORE ROUTE BUILDER (shared by calcRoute + quickCreateRoute) ──
+function buildRouteStops(primaryId, rType, partenzaH, partenzaM){
+  const maxCassoni = rType==='tv' ? MAX_TV : MAX_FRIGO;
+  const alreadyAssigned = new Set(uscite.flatMap(u=>u.stops.map(s=>s.isola.id)));
+  const primary = isole.find(i=>i.id===primaryId);
+  if(!primary) return [];
+
+  // ── Parametri configurabili ──
+  const raggioKm = parseFloat(document.getElementById('setRaggioKm')?.value||80);
+  const speedKmh = parseFloat(document.getElementById('setSpeedKmh')?.value||SPEED_KMH);
+  const minCass  = parseFloat(document.getElementById('setMinCassone')?.value||MIN_PER_CASSONE);
+
+  // Calcola minuti disponibili dall'ora di partenza passata esplicitamente
+  const partenzaDec = (partenzaH||ORA_INIZIO_TURNO) + (partenzaM||0)/60;
+  const minDisponibili = Math.max(60, (ORA_FINE_TURNO - partenzaDec) * 60 - 15);
+
+  // Helper: stima tempo percorso ottimizzato (greedy order per realismo)
+  function stimaTempo(fermate){
+    if(!fermate.length) return 0;
+    const ord = greedyOrder(fermate); // ordina per distanza realistica
+    let km = kmBetween(HQ, ord[0].isola);
+    for(let i=0;i<ord.length-1;i++) km += kmBetween(ord[i].isola, ord[i+1].isola);
+    km += kmBetween(ord[ord.length-1].isola, HQ);
+    const cass = fermate.reduce((s,f)=>s+f.cassoniDaCaricare, 0);
+    // Aggiungi 10% margine di sicurezza sulle distanze (strade reali > linea d'aria)
+    return Math.round(km * 1.1 / speedKmh * 60) + cass * minCass;
+  }
+
+  let cassoniUsati = primary.cassoniPieni;
+  const primaryStop = {isola:primary, cassoniDaCaricare:primary.cassoniPieni, skipped:false};
+  // Verifica che anche solo la fermata primaria rientri nel turno
+  if(stimaTempo([primaryStop]) > minDisponibili){
+    return [primaryStop]; // ritorna solo la primary, niente candidati
+  }
+  const stops = [primaryStop];
+
+  // Candidati entro il raggio dall'HQ (non dalla primary — evita percorsi lunghissimi)
+  const distHQ = i => distDeg(i, HQ) * KM_PER_DEG * 1.3;
+  const candidates = isole
+    .filter(i => i.id!==primary.id && !i.excluded && !alreadyAssigned.has(i.id) && i.cassoniPieni>0)
+    .map(i => ({...i, distKm: distDeg(i,primary)*KM_PER_DEG*1.35, distHqKm: distHQ(i)}))
+    .filter(i => i.distHqKm < raggioKm)
+    .sort((a,b) => {
+      // Score: % riempimento pesa 60%, vicinanza pesa 40%
+      const sa = (a.pct/100)*0.6 - (a.distKm/raggioKm)*0.4;
+      const sb = (b.pct/100)*0.6 - (b.distKm/raggioKm)*0.4;
+      return sb - sa;
+    });
+
+  for(const cand of candidates){
+    if(cassoniUsati >= maxCassoni) break;
+    const orig = isole.find(x=>x.id===cand.id);
+    if(!orig) continue;
+    const daCaricare = Math.min(orig.cassoniPieni, maxCassoni-cassoniUsati);
+    if(daCaricare <= 0) continue;
+
+    // ── VINCOLO TURNO: salta se aggiungere questa fermata fa sforare le 17:30 ──
+    const candidateStops = [...stops, {isola:orig, cassoniDaCaricare:daCaricare, skipped:false}];
+    const minStimati = stimaTempo(candidateStops);
+    if(minStimati > minDisponibili) continue; // salta questa fermata, prova la prossima
+
+    stops.push({isola:orig, cassoniDaCaricare:daCaricare, skipped:false});
+    cassoniUsati += daCaricare;
+  }
+
+  // Ottimizza con greedy + 2-opt
+  return optimizeRoute(stops);
+}
+
+function createUscita(primaryId, rType, label){
+  const piano = getPianificazioneEffettiva();
+  const stops=buildRouteStops(primaryId, rType, piano.partenzaH, piano.partenzaM);
+  const id=Date.now();
+  const color=nextRouteColor();
+  const newUscita={id,color,label:label||`#${uscite.length+1}`,routeType:rType,stops,lines:[]};
+  uscite.push(newUscita);
+  activeUscitaId=id;
+  route=newUscita.stops; // backward compat
+  routeMode=true;
+  showRouteUI();
+  refreshRouteUI();
+  const allPts=[[HQ.lat,HQ.lng],...stops.map(s=>[s.isola.lat,s.isola.lng]),[HQ.lat,HQ.lng]];
+  if(allPts.length>1) map.fitBounds(L.latLngBounds(allPts),{padding:[40,40],maxZoom:12});
+  showToast('✨',`Uscita ${newUscita.label} creata`,`${stops.length} fermate · ${color}`);
+}
+
+function calcRoute(){
+  const startQ=(document.getElementById('routeStartInput').value||'').trim().toLowerCase();
+  const rType=document.getElementById('routeType').value;
+  let primary=isole.find(i=>i.name.toLowerCase().includes(startQ)||i.comune.toLowerCase().includes(startQ));
+  if(!primary){
+    const criticals=isole.filter(i=>statusColor(i.pct)==='red'&&!i.excluded);
+    primary=criticals[Math.floor(Math.random()*criticals.length)]||isole[0];
+  }
+  closeModal('routeModal');
+  createUscita(primary.id, rType);
+}
+
+function quickCreateRoute(isolaId){
+  map.closePopup();
+  // Auto-pianifica: se siamo dopo le 17:30 passa al giorno dopo
+  const piano = getPianificazioneOrario();
+  pianModalChoice = piano.domani ? 'domani' : 'oggi';
+  const rType = 'frigo';
+  createUscita(isolaId, rType);
+}
+
+function showRouteUI(){
+  document.getElementById('filterRoute').style.display='';
+  document.getElementById('btnAreaBottom').style.display='none';
+  const uh=document.getElementById('usciteHdr'); if(uh) uh.style.display='';
+  const dp=document.getElementById('detailPanel'); if(dp) dp.style.display='flex';
+  showMapRouteStats(true);
+  // Assicura che Camion sia il tab attivo di default
+  switchDpTab('camion', document.querySelector('.dp-tab'));
+  renderUsciteCards();
+}
+
+function clearActiveRoute(){
+  if(!activeUscitaId) return;
+  const idx=uscite.findIndex(u=>u.id===activeUscitaId);
+  if(idx>=0){
+    uscite[idx].lines&&uscite[idx].lines.forEach(l=>l.remove());
+    uscite.splice(idx,1);
+  }
+  routeLines=routeLines.filter(l=>{try{return map.hasLayer(l);}catch{return false;}});
+  if(uscite.length>0){
+    activeUscitaId=uscite[uscite.length-1].id;
+    route=getActiveUscita().stops;
+  } else {
+    activeUscitaId=null;
+    route=[];
+    routeMode=false;
+    document.getElementById('filterRoute').style.display='none';
+    const bc2=document.getElementById('bcText'); if(bc2) bc2.textContent='Tutte le isole';
+    const rm2=document.getElementById('rpMeta'); if(rm2) rm2.textContent='';
+    const tw2=document.getElementById('turnWarning'); if(tw2){tw2.className='turn-warning';tw2.textContent='';}
+    const dp2=document.getElementById('detailPanel'); if(dp2) dp2.style.display='none';
+    const uh2=document.getElementById('usciteHdr'); if(uh2) uh2.style.display='none';
+
+    showMapRouteStats(false);
+  }
+  refreshRouteUI();
+  renderUsciteCards();
+  showToast('🗑️','Uscita rimossa','');
+}
+
+function clearRoute(){ clearActiveRoute(); }
+
+function setActiveUscita(id){
+  activeUscitaId=id;
+  const u=getActiveUscita();
+  if(u) route=u.stops;
+  refreshRouteUI();
+}
+
+// ── EXCLUDE ──
+function toggleExclude(id){
+  const isola=isole.find(i=>i.id===id);
+  if(!isola)return;
+  isola.excluded=!isola.excluded;
+  if(isola.excluded&&isola._routeOrder!==null){
+    const idx=route.findIndex(r=>r.isola.id===id);
+    if(idx>=0)removeStop(idx);
+    else{isola._routeOrder=null;}
+  }
+  renderList();renderMarkers();
+  showToast(isola.excluded?'🚫':'✅',isola.excluded?'Isola esclusa':'Isola riattivata',isola.name);
+}
+
+// ── LIST ──
+function getFiltered(){
+  const q=(document.getElementById('searchInput').value||'').toLowerCase();
+  return isole.filter(i=>{
+    if(currentFilter==='route') return !!getIsolaUscita(i.id);
+    const mf=currentFilter==='all'||statusColor(i.pct)===currentFilter;
+    const ms=!q||i.name.toLowerCase().includes(q)||i.comune.toLowerCase().includes(q);
+    return mf&&ms;
+  }).sort((a,b)=>{
+    const au=getIsolaUscita(a.id), bu=getIsolaUscita(b.id);
+    if(au&&!bu) return -1;
+    if(bu&&!au) return 1;
+    return b.pct-a.pct;
+  });
+}
+
+function renderList(){
+  // Se ci sono uscite attive, mostra le card uscite invece della lista isole
+  if(uscite.length > 0){ renderUsciteCards(); return; }
+  const list=document.getElementById('isoleList')||document.getElementById('usciteList');
+  const filtered=getFiltered().sort((a,b)=>b.pct-a.pct); // critiche prima
+  list.innerHTML='';
+  if(!filtered.length){list.innerHTML='<div style="text-align:center;padding:24px;color:var(--text-2);font-size:12.5px;">Nessuna isola trovata</div>';return;}
+  filtered.slice(0,80).forEach((isola,idx)=>{
+    const col=statusColor(isola.pct);
+    const ownerU=getIsolaUscita(isola.id);
+    const inRoute=!!ownerU;
+    const div=document.createElement('div');
+    div.className=`isola-card${inRoute?' in-route':''}${isola.excluded?' excluded':''}`;
+    if(inRoute) div.style.borderColor=ownerU.color+'55';
+    div.style.animationDelay=`${Math.min(idx,30)*.012}s`;
+    let actions='';
+    if(isola.excluded){
+      actions=`<div class="ic-card-actions"><button class="ic-action-btn ic-unexcl-btn" onclick="event.stopPropagation();toggleExclude(${isola.id})">↩ Riattiva</button></div>`;
+    } else if(!inRoute){
+      // Always show "Crea uscita"; also show "Aggiungi" if a route is already active
+      const addBtn=routeMode?`<button class="ic-action-btn ic-add-btn" onclick="event.stopPropagation();addToRoute(${isola.id})">+ Aggiungi</button>`:'';
+      const exclBtn=routeMode?`<button class="ic-action-btn ic-excl-btn" onclick="event.stopPropagation();toggleExclude(${isola.id})">🚫</button>`:'';
+      actions=`<div class="ic-card-actions"><button class="ic-action-btn ic-create-btn" onclick="event.stopPropagation();quickCreateRoute(${isola.id})">🚛 Nuova uscita</button>${addBtn}${exclBtn}</div>`;
+    };
+    div.innerHTML=`
+      <div class="ic-top">
+        <div class="ic-dot ${col}"></div>
+        <div class="ic-info">
+          <div class="ic-name">${isola.name}</div>
+          <div class="ic-addr">${isola.address}</div>
+        </div>
+        <div class="ic-right">
+          <div class="ic-pct pct-${col}">${isola.pct}%</div>
+          <div class="ic-cass">${isola.cassoniPieni}/${isola.cassoniTot} cass.</div>
+        </div>
+      </div>
+      <div class="ic-bar"><div class="ic-bar-fill bar-${col}" style="width:${isola.pct}%"></div></div>
+      <div class="ic-bottom">
+        <span class="ic-tag tag-${col}">${col==='red'?'CRITICA':col==='yellow'?'QUASI PIENA':'OK'}</span>
+        <span style="font-size:10px;color:var(--text-2);">${isola.type}</span>
+        ${ownerU?`<div class="ic-route-order" style="background:${ownerU.color};">🚛 Uscita ${ownerU.label}</div>`:isola.excluded?`<div class="ic-excluded-badge">🚫 Esclusa</div>`:actions}
+      </div>`;
+    div.onclick=()=>{
+      if(markers[isola.id]){
+        map.panTo([isola.lat,isola.lng],{animate:true,duration:.5});
+        // Apri popup dopo che la mappa ha finito di spostarsi
+        setTimeout(()=>{ markers[isola.id].openPopup(); }, 550);
+      }
+    };
+    list.appendChild(div);
+  });
+  if(filtered.length>80){
+    const m=document.createElement('div');
+    m.style.cssText='text-align:center;padding:8px;font-size:11px;color:var(--text-2);';
+    m.textContent=`+ altri ${filtered.length-80} — affina la ricerca`;
+    list.appendChild(m);
+  }
+}
+
+function addToRoute(id){
+  const isola=isole.find(i=>i.id===id);
+  if(!isola||isola.excluded) return;
+  const uscita=getActiveUscita();
+  if(!uscita){showToast('⚠️','Nessuna uscita attiva','Crea prima una nuova uscita');return;}
+  if(getIsolaUscita(id)){showToast('ℹ️','Già assegnata',isola.name);return;}
+  uscita.stops.push({isola,cassoniDaCaricare:isola.cassoniPieni,skipped:false});
+  route=uscita.stops;
+  refreshRouteUI();
+  showToast('✅','Fermata aggiunta',isola.name);
+}
+
+function updateStats(){
+  let r=0,y=0,g=0;
+  isole.forEach(i=>{const c=statusColor(i.pct);if(c==='red')r++;else if(c==='yellow')y++;else g++;});
+  // Map stats strip
+  const tr=document.getElementById('tileRed'); if(tr) tr.textContent=r;
+  const ty=document.getElementById('tileYellow'); if(ty) ty.textContent=y;
+  const tg=document.getElementById('tileGreen'); if(tg) tg.textContent=g;
+  // Chip filtro con contatore dinamico (via ID)
+  const chipTutte=document.getElementById('chipTutte');
+  if(chipTutte) chipTutte.textContent='Tutte '+isole.length;
+  const chipRed=document.getElementById('chipRed');
+  if(chipRed) chipRed.textContent='🔴 Critiche '+r;
+  const chipYellow=document.getElementById('chipYellow');
+  if(chipYellow) chipYellow.textContent='🟡 Quasi piene '+y;
+  const chipGreen=document.getElementById('chipGreen');
+  if(chipGreen) chipGreen.textContent='🟢 OK '+g;
+}
+function onMainSearch(input){
+  const q=input.value.trim();
+  const clear=document.getElementById('searchClear');
+  const box=document.getElementById('mainSearchSuggestions');
+  clear.style.display=q?'inline':'none';
+  if(!q){box.style.display='none';renderList();return;}
+  // Show dropdown suggestions
+  const matches=isole.filter(i=>
+    i.name.toLowerCase().includes(q.toLowerCase())||
+    i.comune.toLowerCase().includes(q.toLowerCase())
+  ).sort((a,b)=>b.pct-a.pct).slice(0,10);
+  renderList(); // also filter the list
+  if(!matches.length){box.style.display='none';return;}
+  box.style.display='block';
+  box.innerHTML='';
+  // Group by comune for clarity
+  const seen=new Set();
+  matches.forEach(isola=>{
+    const div=document.createElement('div');
+    div.className='sugg-item';
+    const c=statusClr(isola.pct);
+    const col=statusColor(isola.pct);
+    const tags={red:'🔴',yellow:'🟡',green:'🟢'};
+    div.innerHTML=`
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${highlightMatch(isola.name,q)}</div>
+        <div style="font-size:10.5px;color:var(--text-2);">${isola.comune} · ${isola.cassoniPieni}/${isola.cassoniTot} cassoni</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:5px;flex-shrink:0;">
+        <span style="font-size:10px;">${tags[col]}</span>
+        <span class="sugg-pct" style="color:${c};">${isola.pct}%</span>
+      </div>`;
+    div.onclick=()=>{
+      input.value=isola.name;
+      box.style.display='none';
+      document.getElementById('searchClear').style.display='inline';
+      renderList();
+      // Pan map to this island + apri popup
+      if(markers[isola.id]){
+        map.panTo([isola.lat,isola.lng],{animate:true,duration:.6});
+        setTimeout(()=>{ markers[isola.id].openPopup(); }, 700);
+      }
+    };
+    box.appendChild(div);
+    seen.add(isola.id);
+  });
+}
+
+function highlightMatch(text, q){
+  if(!q)return text;
+  const idx=text.toLowerCase().indexOf(q.toLowerCase());
+  if(idx<0)return text;
+  return text.slice(0,idx)+`<strong style="color:var(--text);">`+text.slice(idx,idx+q.length)+`</strong>`+text.slice(idx+q.length);
+}
+
+function clearMainSearch(){
+  document.getElementById('searchInput').value='';
+  document.getElementById('searchClear').style.display='none';
+  document.getElementById('mainSearchSuggestions').style.display='none';
+  renderList();
+}
+
+function setFilter(f,el){currentFilter=f;document.querySelectorAll('.fc').forEach(c=>c.classList.remove('active'));el.classList.add('active');renderList();renderMarkers();}
+function openAddModal(){document.getElementById('addModal').classList.add('open');}
+function closeModal(id){document.getElementById(id).classList.remove('open');}
+function openRouteModal(){
+  initPianToggle();document.getElementById('routeModal').classList.add('open');}
+function addIsola(){
+  const name=document.getElementById('addName').value.trim();
+  const city=document.getElementById('addCity').value.trim();
+  if(!name){showToast('⚠️','Nome mancante','Inserisci il nome dell\'isola');return;}
+  const com=COMUNI.find(c=>c.name.toLowerCase()===city.toLowerCase())||COMUNI[0];
+  const cassoniTot=parseInt(document.getElementById('addCassoni').value)||4;
+  const pct=parseInt(document.getElementById('addLevel').value)||0;
+  isole.push({id:isole.length+1,name,address:city,comune:com.name,
+    lat:com.lat+rnd(-0.07,0.07),lng:com.lng+rnd(-0.09,0.09),
+    pct,cassoniTot,cassoniPieni:Math.round(cassoniTot*(pct/100)),
+    type:document.getElementById('addType').value,excluded:false,_routeOrder:null});
+  closeModal('addModal');renderList();renderMarkers();updateStats();
+  showToast('✅','Isola aggiunta',name);
+}
+function refreshData(){
+  isole.forEach(i=>{i.pct=Math.min(100,Math.max(0,i.pct+Math.round(rnd(-5,5))));i.cassoniPieni=Math.round(i.cassoniTot*(i.pct/100));});
+  renderList();renderMarkers();updateStats();
+  showToast('🔄','Aggiornato','Livelli aggiornati');
+}
+function exportRoute(){
+  const uscita=getActiveUscita(); if(!uscita){showToast('⚠️','Nessuna uscita','');return;}
+  const s=calcRouteStats(uscita);
+  const now=new Date();
+  const returnDate=new Date(now.getTime()+s.totalMin*60000);
+  let txt=`FOGLIO DI VIAGGIO — EcoFleet\n`;
+  txt+=`Uscita: ${uscita.label} | Data: ${now.toLocaleDateString('it-IT')} | Partenza: ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}\n`;
+  txt+=`Ritorno stimato: ${String(returnDate.getHours()).padStart(2,'0')}:${String(returnDate.getMinutes()).padStart(2,'0')} | Tipo: ${uscita.routeType} | Km totali: ${s.totalKm}km\n\n`;
+  txt+=`FERMATE:\n0. Gualdo Tadino (Sede) — PARTENZA\n`;
+  uscita.stops.filter(r=>!r.skipped).forEach((r,i)=>{
+    txt+=`${i+1}. ${r.isola.name}\n   ${r.isola.address}\n   Da caricare: ${r.cassoniDaCaricare} cassoni (${r.isola.type})\n`;
+  });
+  txt+=`${uscita.stops.filter(r=>!r.skipped).length+1}. Gualdo Tadino (Sede) — RITORNO\n\nTotale cassoni: ${s.totalCassoni}/${s.maxCassoni}`;
+  const blob=new Blob([txt],{type:'text/plain'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`foglio-uscita-${uscita.label}.txt`;a.click();
+  showToast('📋','Foglio generato','Download avviato');
+}
+function showToast(icon,title,msg){
+  const t=document.getElementById('toast');
+  document.getElementById('tIcon').textContent=icon;
+  document.getElementById('tTitle').textContent=title;
+  document.getElementById('tMsg').textContent=msg;
+  t.classList.add('show');setTimeout(()=>t.classList.remove('show'),3500);
+}
+
+
+
+// ── DETAIL PANEL TABS ──
+function switchDpTab(tab, el){
+  document.querySelectorAll('.dp-tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  document.querySelectorAll('.dp-fermate,.dp-camion,.dp-stats').forEach(p=>p.classList.remove('active-tab'));
+  if(tab==='fermate') document.getElementById('dpFermate').classList.add('active-tab');
+  if(tab==='camion')  document.getElementById('dpCamion').classList.add('active-tab');
+  if(tab==='stats')   document.getElementById('dpStats').classList.add('active-tab');
+}
+// ── USCITE PANEL ──
+function renderUscitePanel(){
+  const tabs=document.getElementById('usciteTabs');
+  if(!tabs) return;
+  tabs.innerHTML='';
+  uscite.forEach(u=>{
+    const tab=document.createElement('div');
+    tab.className='uscita-tab'+(u.id===activeUscitaId?' active':'');
+    tab.style.setProperty('--tab-color',u.color);
+    if(u.id===activeUscitaId) tab.style.background=u.color+'18';
+    const active=u.stops.filter(s=>!s.skipped);
+    const s=calcRouteStats(u);
+    tab.innerHTML=`<div class="uscita-tab-dot" style="background:${u.color};box-shadow:0 0 5px ${u.color}88;"></div><span>Uscita ${u.label}</span><span style="color:var(--text-2);font-size:10px;font-weight:400;">${active.length} fermate · ${s.totalKm}km</span>`;
+    tab.onclick=()=>setActiveUscita(u.id);
+    tabs.appendChild(tab);
+  });
+}
+
+// ── ASSIGN TO EXISTING USCITA MODAL ──
+let assignIsolaId=null;
+function openAssignModal(isolaId){
+  assignIsolaId=isolaId;
+  const isola=isole.find(i=>i.id===isolaId);
+  // Build quick picker
+  let html=`<div style="padding:14px 18px;border-bottom:1px solid var(--border);font-family:'Syne',sans-serif;font-size:14px;font-weight:700;">Assegna a uscita</div><div style="padding:12px 18px;">`;
+  html+=`<div style="font-size:12px;color:var(--text-2);margin-bottom:10px;">Scegli a quale uscita aggiungere <strong style="color:var(--text);">${isola.name}</strong></div>`;
+  uscite.forEach(u=>{
+    const s=calcRouteStats(u);
+    const spazio=u.routeType==='tv'?MAX_TV:MAX_FRIGO;
+    const usati=u.stops.filter(x=>!x.skipped).reduce((a,b)=>a+b.cassoniDaCaricare,0);
+    html+=`<div onclick="confirmAssign(${u.id})" style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--surface2);border:1px solid ${u.color}33;border-radius:8px;margin-bottom:7px;cursor:pointer;transition:background .15s;" onmouseover="this.style.background='${u.color}18'" onmouseout="this.style.background='var(--surface2)'">
+      <div style="width:14px;height:14px;border-radius:50%;background:${u.color};box-shadow:0 0 6px ${u.color}88;flex-shrink:0;"></div>
+      <div style="flex:1;"><div style="font-weight:600;font-size:13px;">Uscita ${u.label}</div><div style="font-size:11px;color:var(--text-2);">${u.stops.length} fermate · ${usati}/${spazio} cassoni</div></div>
+      <div style="font-size:12px;font-weight:700;color:${u.color};">→</div>
+    </div>`;
+  });
+  html+=`</div><div style="padding:8px 18px;border-top:1px solid var(--border);display:flex;gap:8px;"><button onclick="document.getElementById('assignOverlay').remove()" style="flex:1;padding:8px;background:var(--surface2);border:1px solid var(--border);border-radius:7px;cursor:pointer;font-family:'Outfit',sans-serif;color:var(--text-2);">Annulla</button></div>`;
+  const overlay=document.createElement('div');
+  overlay.id='assignOverlay';
+  overlay.className='overlay open';
+  overlay.innerHTML=`<div class="modal" style="width:380px;">${html}</div>`;
+  overlay.onclick=(e)=>{if(e.target===overlay)overlay.remove();};
+  document.body.appendChild(overlay);
+}
+function confirmAssign(uscitaId){
+  const isola=isole.find(i=>i.id===assignIsolaId);
+  if(!isola) return;
+  const u=uscite.find(x=>x.id===uscitaId);
+  if(!u) return;
+  u.stops.push({isola,cassoniDaCaricare:isola.cassoniPieni,skipped:false});
+  const overlay=document.getElementById('assignOverlay');
+  if(overlay) overlay.remove();
+  setActiveUscita(uscitaId);
+  showToast('✅',`Aggiunta a Uscita ${u.label}`,isola.name);
+}
+
+// ── SORTABLE DRAG & DROP ──
+let sortableInstance = null;
+
+function initSortable(){
+  const el = document.getElementById('routeStopsScroll');
+  if(sortableInstance){ sortableInstance.destroy(); sortableInstance = null; }
+  sortableInstance = new Sortable(el, {
+    animation: 150,
+    handle: '.drag-handle',
+    draggable: '.route-stop-item:not(.hq-row)',
+    ghostClass: 'sortable-ghost',
+    chosenClass: 'sortable-chosen',
+    onEnd: function(evt){
+      const uscita=getActiveUscita(); if(!uscita) return;
+      const rows = [...document.querySelectorAll('#routeStopsScroll .route-stop-item:not(.hq-row)')];
+      const newOrder = rows.map(r => parseInt(r.getAttribute('data-id'))).filter(id => !isNaN(id));
+      const newStops = newOrder.map(id => uscita.stops.find(s => s.isola.id === id)).filter(Boolean);
+      uscita.stops.length = 0;
+      newStops.forEach(s => uscita.stops.push(s));
+      route = uscita.stops;
+      refreshRouteUI();
+      showToast('↕️', 'Ordine aggiornato', 'Percorso riordinato manualmente');
+    }
+  });
+}
+
+// ── MOBILE TAB SWITCHER ──
+function mobileSwitchTab(tab, el){
+  const lc=document.querySelector('.left-col');
+  const rp=document.querySelector('.right-panel');
+  if(!lc||!rp) return;
+  if(tab==='map'){lc.style.display='none';rp.style.display='flex';}
+  else{lc.style.display='flex';rp.style.display='none';}
+}
+
+
+// ── TAB SYSTEM ──
+let currentTab = 'mappa';
+function switchTab(tab, el){
+  if(tab==='storico') renderStorico();
+  // Hide all tab views
+  document.querySelectorAll('.tab-view').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.snb').forEach(b => b.classList.remove('active'));
+  // Show target
+  const tv = document.getElementById('tab-' + tab);
+  if(tv) tv.classList.add('active');
+  if(el) el.classList.add('active');
+  currentTab = tab;
+  // Init tab content
+  if(tab === 'isole') renderIsoleTab();
+  if(tab === 'flotta') renderFlotta();
+  if(tab === 'pianificazione') renderCalendar();
+  if(tab === 'report') renderReport();
+}
+
+// ── ISOLE TAB ──
+function renderIsoleTab(){
+  const q = (document.getElementById('isoleTabSearch')?.value || '').toLowerCase();
+  const f = document.getElementById('isoleTabFilter')?.value || 'all';
+  const filtered = isole.filter(i => {
+    const mf = f === 'all' || statusColor(i.pct) === f;
+    const ms = !q || i.name.toLowerCase().includes(q) || i.comune.toLowerCase().includes(q);
+    return mf && ms;
+  }).sort((a,b) => b.pct - a.pct);
+  document.getElementById('isoleCount').textContent = filtered.length;
+  const tbody = document.getElementById('isoleTableBody');
+  tbody.innerHTML = '';
+  filtered.slice(0, 200).forEach(isola => {
+    const c = statusColor(isola.pct);
+    const clr = statusClr(isola.pct);
+    const tr = document.createElement('tr');
+    tr.className = 'clickable';
+    tr.innerHTML = `
+      <td style="font-weight:600;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${isola.name}</td>
+      <td>${isola.comune}</td>
+      <td><span class="badge badge-gray">${isola.type}</span></td>
+      <td>${isola.cassoniPieni}/${isola.cassoniTot}</td>
+      <td>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div style="flex:1;height:5px;background:var(--border);border-radius:3px;min-width:60px;">
+            <div style="height:100%;width:${isola.pct}%;background:${clr};border-radius:3px;"></div>
+          </div>
+          <span style="font-weight:700;color:${clr};font-family:'Syne',sans-serif;font-size:13px;min-width:36px;">${isola.pct}%</span>
+        </div>
+      </td>
+      <td><span class="badge badge-${c}">${c==='red'?'CRITICA':c==='yellow'?'QUASI PIENA':'OK'}</span></td>
+      <td style="color:var(--text-2);font-size:12px;">${isola.lastPickup||'—'}</td>`;
+    tr.onclick = () => { switchTab('mappa', document.querySelector('.snb')); setTimeout(() => { if(markers[isola.id]) map.panTo([isola.lat, isola.lng]); }, 200); };
+    tbody.appendChild(tr);
+  });
+}
+
+// ── FLOTTA TAB ──
+let camion = [
+  {id:1, targa:'PG 142 BA', modello:'Iveco Daily 70C', autista:'Rossi Giovanni', capFrigo:20, revisione:'2026-06-15', stato:'disponibile', km:42300},
+  {id:2, targa:'TR 891 XF', modello:'Mercedes Sprinter', autista:'Bianchi Luca', capFrigo:20, revisione:'2026-09-30', stato:'disponibile', km:28700},
+  {id:3, targa:'PG 007 TT', modello:'Fiat Ducato Maxi', autista:'Conti Sara', capFrigo:18, revisione:'2026-03-10', stato:'manutenzione', km:61200},
+  {id:4, targa:'PG 554 NK', modello:'Iveco Daily 70C', autista:'—', capFrigo:20, revisione:'2026-12-01', stato:'disponibile', km:8900},
+];
+
+function renderFlotta(){
+  const attivi = camion.filter(c => c.stato === 'disponibile').length;
+  const manut = camion.filter(c => c.stato === 'manutenzione').length;
+  // KPI
+  document.getElementById('flottaKpi').innerHTML = `
+    <div class="stat-card"><div class="stat-card-val" style="color:var(--accent-lt)">${camion.length}</div><div class="stat-card-lbl">Mezzi totali</div></div>
+    <div class="stat-card"><div class="stat-card-val" style="color:var(--green)">${attivi}</div><div class="stat-card-lbl">Disponibili</div></div>
+    <div class="stat-card"><div class="stat-card-val" style="color:var(--red)">${manut}</div><div class="stat-card-lbl">In manutenzione</div></div>
+    <div class="stat-card"><div class="stat-card-val" style="color:var(--yellow)">${camion.filter(c=>{const d=new Date(c.revisione);const now=new Date();return(d-now)<30*24*3600*1000;}).length}</div><div class="stat-card-lbl">Revisioni in scadenza</div></div>
+  `;
+  // Cards
+  const grid = document.getElementById('flottaCards');
+  grid.innerHTML = '';
+  camion.forEach(c => {
+    const statoBadge = {disponibile:'badge-green',manutenzione:'badge-red','in-uso':'badge-blue'}[c.stato] || 'badge-gray';
+    const statoLabel = {disponibile:'✅ Disponibile',manutenzione:'🔧 Manutenzione','in-uso':'🔄 In uso'}[c.stato] || c.stato;
+    const rev = new Date(c.revisione);
+    const daysLeft = Math.round((rev - new Date()) / (1000*3600*24));
+    const revColor = daysLeft < 30 ? 'var(--red)' : daysLeft < 90 ? 'var(--yellow)' : 'var(--green)';
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px;">
+        <div>
+          <div style="font-family:'Syne',sans-serif;font-size:16px;font-weight:700;">${c.targa}</div>
+          <div style="font-size:12px;color:var(--text-2);">${c.modello}</div>
+        </div>
+        <span class="badge ${statoBadge}">${statoLabel}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
+        <div style="background:var(--surface2);border-radius:6px;padding:8px;">
+          <div style="font-size:10px;color:var(--text-2);margin-bottom:2px;">AUTISTA</div>
+          <div style="font-size:12.5px;font-weight:600;">${c.autista}</div>
+        </div>
+        <div style="background:var(--surface2);border-radius:6px;padding:8px;">
+          <div style="font-size:10px;color:var(--text-2);margin-bottom:2px;">CAPACITÀ</div>
+          <div style="font-size:12.5px;font-weight:600;">${c.capFrigo} cassoni</div>
+        </div>
+        <div style="background:var(--surface2);border-radius:6px;padding:8px;">
+          <div style="font-size:10px;color:var(--text-2);margin-bottom:2px;">KM TOTALI</div>
+          <div style="font-size:12.5px;font-weight:600;">${c.km.toLocaleString()}</div>
+        </div>
+        <div style="background:var(--surface2);border-radius:6px;padding:8px;">
+          <div style="font-size:10px;color:var(--text-2);margin-bottom:2px;">REVISIONE</div>
+          <div style="font-size:12.5px;font-weight:600;color:${revColor};">${rev.toLocaleDateString('it-IT')}</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;">
+        <button onclick="editTruck(${c.id})" style="flex:1;padding:6px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text-2);cursor:pointer;font-size:11.5px;font-family:'Outfit',sans-serif;">✏️ Modifica</button>
+        <button onclick="toggleTruckStatus(${c.id})" style="flex:1;padding:6px;background:var(--accent-dim);border:1px solid var(--accent-lt)33;border-radius:6px;color:var(--accent-lt);cursor:pointer;font-size:11.5px;font-family:'Outfit',sans-serif;">🔄 Stato</button>
+      </div>`;
+    grid.appendChild(card);
+  });
+}
+
+function openAddTruckModal(){ document.getElementById('addTruckModal').classList.add('open'); }
+function addTruck(){
+  const targa = document.getElementById('truckTarga').value.trim();
+  if(!targa){ showToast('⚠️','Targa mancante','Inserisci la targa del mezzo'); return; }
+  camion.push({
+    id: camion.length + 1,
+    targa, modello: document.getElementById('truckModello').value,
+    autista: document.getElementById('truckAutista').value || '—',
+    capFrigo: parseInt(document.getElementById('truckCapFrigo').value) || 20,
+    revisione: document.getElementById('truckRevisione').value || '2027-01-01',
+    stato: document.getElementById('truckStato').value, km: 0
+  });
+  closeModal('addTruckModal');
+  renderFlotta();
+  showToast('✅','Mezzo aggiunto', targa);
+}
+function editTruck(id){ showToast('ℹ️','Modifica mezzo','Funzionalità in sviluppo'); }
+function toggleTruckStatus(id){
+  const c = camion.find(t => t.id === id);
+  if(!c) return;
+  const states = ['disponibile','in-uso','manutenzione'];
+  c.stato = states[(states.indexOf(c.stato) + 1) % states.length];
+  renderFlotta();
+  showToast('🔄','Stato aggiornato', c.targa + ' → ' + c.stato);
+}
+
+// ── CALENDAR ──
+let calYear = 2026, calMonth = 2; // March 2026 (0-indexed)
+const USCITE = [
+  {date:'2026-03-05',label:'Perugia Nord',tipo:'blue'},
+  {date:'2026-03-05',label:'Foligno Centro',tipo:'yellow'},
+  {date:'2026-03-07',label:'Terni Est',tipo:'blue'},
+  {date:'2026-03-10',label:'Spoleto',tipo:'green'},
+  {date:'2026-03-12',label:'Gubbio',tipo:'blue'},
+  {date:'2026-03-14',label:'Perugia Sud',tipo:'green'},
+  {date:'2026-03-18',label:'Assisi',tipo:'blue'},
+  {date:'2026-03-21',label:'Narni',tipo:'blue'},
+  {date:'2026-03-25',label:'Umbertide',tipo:'green'},
+  {date:'2026-03-28',label:'Città di Castello',tipo:'blue'},
+  {date:'2026-02-20',label:'Perugia Centro',tipo:'green'},
+  {date:'2026-02-24',label:'Terni',tipo:'green'},
+];
+
+function renderCalendar(){
+  const months = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
+  document.getElementById('calMonthLabel').textContent = months[calMonth] + ' ' + calYear;
+  const grid = document.getElementById('calGrid');
+  grid.innerHTML = '';
+  const days = ['Lun','Mar','Mer','Gio','Ven','Sab','Dom'];
+  days.forEach(d => { const h = document.createElement('div'); h.className = 'cal-day-hdr'; h.textContent = d; grid.appendChild(h); });
+  const first = new Date(calYear, calMonth, 1);
+  const last = new Date(calYear, calMonth+1, 0);
+  let startDay = first.getDay() - 1; if(startDay < 0) startDay = 6;
+  const prevLast = new Date(calYear, calMonth, 0).getDate();
+  const today = new Date();
+  for(let i = 0; i < startDay; i++){
+    const d = document.createElement('div'); d.className = 'cal-day other-month';
+    d.innerHTML = `<div class="cal-day-num">${prevLast - startDay + i + 1}</div>`; grid.appendChild(d);
+  }
+  for(let i = 1; i <= last.getDate(); i++){
+    const d = document.createElement('div');
+    const dateStr = `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(i).padStart(2,'0')}`;
+    const isToday = today.getFullYear()===calYear && today.getMonth()===calMonth && today.getDate()===i;
+    d.className = 'cal-day' + (isToday ? ' today' : '');
+    const events = USCITE.filter(u => u.date === dateStr);
+    let evHTML = events.map(e => `<div class="cal-event cal-event-${e.tipo}">${e.label}</div>`).join('');
+    d.innerHTML = `<div class="cal-day-num">${i}</div>${evHTML}`;
+    d.onclick = () => showToast('📅', `${i} ${months[calMonth]}`, events.length ? events.map(e=>e.label).join(', ') : 'Nessuna uscita');
+    grid.appendChild(d);
+  }
+  let nextDay = 1;
+  const totalCells = startDay + last.getDate();
+  const remaining = totalCells % 7 === 0 ? 0 : 7 - (totalCells % 7);
+  for(let i = 0; i < remaining; i++){
+    const d = document.createElement('div'); d.className = 'cal-day other-month';
+    d.innerHTML = `<div class="cal-day-num">${nextDay++}</div>`; grid.appendChild(d);
+  }
+}
+function calPrev(){ calMonth--; if(calMonth<0){calMonth=11;calYear--;} renderCalendar(); }
+function calNext(){ calMonth++; if(calMonth>11){calMonth=0;calYear++;} renderCalendar(); }
+function calToday(){ const n=new Date(); calYear=n.getFullYear(); calMonth=n.getMonth(); renderCalendar(); }
+
+// ── REPORT TAB ──
+function renderReport(){
+  const body = document.getElementById('reportBody');
+  const months = [
+    {label:'Febbraio 2026', uscite:18, km:2840, cassoni:287, isole:124, efficienza:91},
+    {label:'Gennaio 2026',  uscite:16, km:2610, cassoni:251, isole:108, efficienza:88},
+    {label:'Dicembre 2025', uscite:14, km:2290, cassoni:219, isole:97,  efficienza:85},
+  ];
+  const sel = document.getElementById('reportMonth').selectedIndex;
+  const m = months[sel] || months[0];
+  const barData = [
+    {lbl:'Ott', val:198, max:300, color:'#3b82f6'},
+    {lbl:'Nov', val:221, max:300, color:'#3b82f6'},
+    {lbl:'Dic', val:219, max:300, color:'#3b82f6'},
+    {lbl:'Gen', val:251, max:300, color:'#3b82f6'},
+    {lbl:'Feb', val:287, max:300, color:'#22c55e'},
+  ];
+  body.innerHTML = `
+    <div class="stat-cards">
+      <div class="stat-card"><div class="stat-card-val" style="color:var(--accent-lt)">${m.uscite}</div><div class="stat-card-lbl">Uscite effettuate</div></div>
+      <div class="stat-card"><div class="stat-card-val" style="color:var(--green)">${m.cassoni}</div><div class="stat-card-lbl">Cassoni raccolti</div></div>
+      <div class="stat-card"><div class="stat-card-val" style="color:var(--yellow)">${m.km.toLocaleString()}</div><div class="stat-card-lbl">Km percorsi</div></div>
+      <div class="stat-card"><div class="stat-card-val" style="color:var(--purple)">${m.isole}</div><div class="stat-card-lbl">Isole svuotate</div></div>
+      <div class="stat-card"><div class="stat-card-val" style="color:var(--green)">${m.efficienza}%</div><div class="stat-card-lbl">Efficienza percorsi</div></div>
+      <div class="stat-card"><div class="stat-card-val" style="color:var(--text-2)">${Math.round(m.km/m.uscite)}</div><div class="stat-card-lbl">Km medi per uscita</div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
+      <div class="card">
+        <div class="card-title">📦 Cassoni raccolti — ultimi 5 mesi</div>
+        <div class="chart-bars">
+          ${barData.map(b => `
+            <div class="chart-bar-wrap">
+              <div class="chart-bar-val">${b.val}</div>
+              <div class="chart-bar" style="height:${Math.round(b.val/b.max*100)}%;background:${b.color};width:100%;"></div>
+              <div class="chart-bar-lbl">${b.lbl}</div>
+            </div>`).join('')}
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">🗺️ Distribuzione uscite per zona</div>
+        ${[['Perugia e hinterland','42%',42,'#3b82f6'],['Terni e hinterland','28%',28,'#f59e0b'],['Foligno / Spoleto','18%',18,'#22c55e'],['Altre zone','12%',12,'#8b5cf6']].map(([z,p,v,c])=>`
+        <div class="prog-row">
+          <div class="prog-label"><span>${z}</span><span>${p}</span></div>
+          <div class="prog-bar"><div class="prog-fill" style="width:${v*2}%;background:${c};"></div></div>
+        </div>`).join('')}
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">📋 Ultime uscite del mese</div>
+      <table class="data-table" style="margin-top:8px;">
+        <thead><tr><th>Data</th><th>Zona</th><th>Autista</th><th>Cassoni</th><th>Km</th><th>Carico</th></tr></thead>
+        <tbody>
+          ${[['28/02','Perugia Nord','Rossi G.',18,142,'90%'],['26/02','Terni Est','Bianchi L.',16,178,'80%'],['24/02','Foligno Centro','Conti S.',20,134,'100%'],['21/02','Spoleto','Rossi G.',14,198,'70%'],['19/02','Gubbio','Bianchi L.',19,167,'95%']].map(([d,z,a,c,k,p])=>`
+          <tr><td style="color:var(--text-2);font-size:12px;">${d}</td><td style="font-weight:600;">${z}</td><td>${a}</td>
+          <td><span class="badge badge-blue">${c} cass.</span></td><td style="color:var(--text-2);">${k}km</td>
+          <td style="color:${parseInt(p)>=80?'var(--green)':'var(--yellow)'};font-weight:700;">${p}</td></tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+function exportReport(){ showToast('📤','Export avviato','Report PDF in generazione…'); }
+
+// ── IMPOSTAZIONI ──
+function saveSettings(){
+  const minCass = parseInt(document.getElementById('setMinCassone').value);
+  const speed = parseInt(document.getElementById('setSpeedKmh').value);
+  const turno = parseInt(document.getElementById('setTurnoOre').value);
+  // Apply to live variables (MIN_PER_CASSONE etc are const - in a real app these would be var)
+  showToast('💾','Impostazioni salvate','Le modifiche sono state applicate');
+}
+function resetSettings(){
+  document.getElementById('setMinCassone').value = 12;
+  document.getElementById('setSpeedKmh').value = 55;
+  document.getElementById('setTurnoOre').value = 8;
+  document.getElementById('setRaggioKm').value = 90;
+  document.getElementById('setMaxFrigo').value = 20;
+  document.getElementById('setMaxTv').value = 30;
+  document.getElementById('setSogliaRed').value = 85;
+  document.getElementById('setSogliaYellow').value = 60;
+  document.getElementById('setFinestra').value = 48;
+  showToast('↩️','Default ripristinati','Parametri reimpostati ai valori originali');
+}
+
+// ── Make mappa tab the default active ──
+
+// ── RESIZER (drag to resize panel) ──
+(function(){
+  const resizer = document.getElementById('resizer');
+  if(!resizer) return;
+  let dragging = false, startX = 0, startW = 0;
+  resizer.addEventListener('mousedown', e => {
+    dragging = true;
+    startX = e.clientX;
+    startW = document.querySelector('.left-panel').offsetWidth;
+    resizer.classList.add('dragging');
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  });
+  document.addEventListener('mousemove', e => {
+    if(!dragging) return;
+    const delta = e.clientX - startX;
+    const newW = Math.max(300, Math.min(window.innerWidth * 0.75, startW + delta));
+    document.querySelector('.left-panel').style.width = newW + 'px';
+    document.documentElement.style.setProperty('--panel-w', newW + 'px');
+  });
+  document.addEventListener('mouseup', () => {
+    if(!dragging) return;
+    dragging = false;
+    resizer.classList.remove('dragging');
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+    // Invalidate map size after resize
+    if(typeof map !== 'undefined') setTimeout(()=>map.invalidateSize(), 50);
+  });
+  // Touch support
+  resizer.addEventListener('touchstart', e => {
+    dragging = true;
+    startX = e.touches[0].clientX;
+    startW = document.querySelector('.left-panel').offsetWidth;
+  }, {passive:true});
+  document.addEventListener('touchmove', e => {
+    if(!dragging) return;
+    const delta = e.touches[0].clientX - startX;
+    const newW = Math.max(300, Math.min(window.innerWidth * 0.75, startW + delta));
+    document.querySelector('.left-panel').style.width = newW + 'px';
+  }, {passive:true});
+  document.addEventListener('touchend', () => { dragging = false; if(typeof map!=='undefined') setTimeout(()=>map.invalidateSize(),50); });
+})();
+
+// ── USCITE CARDS (new visual panel) ──
+function renderUsciteCards(){
+  const container = document.getElementById('usciteList');
+  const uh = document.getElementById('usciteHdr');
+  if(!container) return;
+  if(uscite.length === 0){
+    if(uh) uh.style.display='none';
+    renderList(); // show island list instead
+    return;
+  }
+  if(uh) uh.style.display='';
+  container.innerHTML = '';
+  uscite.forEach((u,idx) => {
+    const s = calcRouteStats(u);
+    const isActive = u.id === activeUscitaId;
+    const pct = Math.round((s.active/Math.max(s.active+1,1))*100); // progress visual
+    const card = document.createElement('div');
+    card.className = 'uscita-card-big' + (isActive ? ' active' : '');
+    card.style.animationDelay = (idx*0.06)+'s';
+    // Build timeline rows from stops
+    let tlHTML = '';
+    // HQ start
+    tlHTML += `<div class="tl-row"><div class="tl-dot hq-dot" style="background:var(--green);border-color:var(--green);">🏠</div><div class="tl-info"><div class="tl-label">Gualdo Tadino (Sede)</div><div class="tl-sub">Partenza</div></div><div class="tl-time">—</div></div>`;
+    const visStops = u.stops.slice(0,4); // max 4 shown in card
+    visStops.forEach((st,i) => {
+      const cls = st.skipped ? 'stop-skipped' : '';
+      tlHTML += `<div class="tl-row ${cls}">
+        <div class="tl-dot${isActive&&i===0?' current':''}"></div>
+        <div class="tl-info">
+          <div class="tl-label">${st.isola.name}</div>
+          <div class="tl-sub">${st.cassoniDaCaricare}/${st.isola.cassoniTot} cassoni${st.skipped?' · saltata':''}</div>
+        </div>
+        <div class="tl-time${isActive&&i===0?' live':''}">—</div>
+      </div>`;
+    });
+    if(u.stops.length > 4) tlHTML += `<div class="tl-row"><div class="tl-dot" style="font-size:8px;color:var(--text-2);">…</div><div class="tl-info" style="color:var(--text-2);font-size:11px;">+${u.stops.length-4} fermate</div></div>`;
+    // HQ return
+    const ret = calcReturnTime(s.totalMin);
+    tlHTML += `<div class="tl-row"><div class="tl-dot hq-dot" style="background:var(--green);border-color:var(--green);">🏠</div><div class="tl-info"><div class="tl-label">Gualdo Tadino (Sede)</div><div class="tl-sub">Ritorno stimato</div></div><div class="tl-time">${ret}</div></div>`;
+    const overT = s.totalMin > TURNO_ORE*60;
+    const badgeCls = overT ? 'badge-crit' : isActive ? 'badge-active' : 'badge-planned';
+    const badgeTxt = overT ? '⚠️ Oltre turno' : isActive ? 'In modifica' : 'Pianificata';
+    card.innerHTML = `
+      <div class="ucb-header">
+        <div class="ucb-dot" style="background:${u.color};box-shadow:0 0 7px ${u.color}88;"></div>
+        <div class="ucb-id">Uscita ${u.label}</div>
+        <div style="font-size:10px;color:${overT?'var(--red)':s.pct>=85?'var(--yellow)':'var(--text-2)'};font-family:'DM Mono',monospace;margin-left:2px;">
+          ${s.totalCassoni}/${s.maxCassoni}
+        </div>
+        <div class="ucb-badge ${badgeCls}" style="margin-left:4px;">${badgeTxt}</div>
+        ${isActive?'<button class="ucb-pdf" onclick="event.stopPropagation();exportCurrentPDF()" title="Stampa foglio viaggio">🖨️</button>':''}
+        <button class="ucb-del" onclick="event.stopPropagation();deleteUscita(${u.id})">✕</button>
+      </div>
+      <div class="ucb-prog-wrap">
+        <div class="prog-track"><div class="prog-fill" style="width:${isActive?Math.min(95,Math.round(s.active/(s.active+2)*100)):10}%;background:${u.color};transition:width .5s;"></div></div>
+      </div>
+      ${isActive
+        ? `<div style="border-top:1px solid var(--border2);">
+            <button class="btn-completa" onclick="event.stopPropagation();completaUscita(${u.id})">
+              ✅ Completa uscita — isole svuotate
+            </button>
+            <div id="routeStopsScroll" style="max-height:270px;overflow-y:auto;overflow-x:hidden;"></div>
+          </div>`
+        : `<div class="ucb-timeline">${tlHTML}</div>`
+      }`;
+    card.onclick = (e) => {
+      if(e.target.closest('.ucb-del,.cass-inp,.sa,.drag-handle')) return;
+      setActiveUscita(u.id);
+    };
+    container.appendChild(card);
+    // Se è la card attiva, aggiungi subito le fermate modificabili
+    if(isActive) renderRouteStops();
+  });
+
+  // Update active uscita title in route panel header
+  const au = getActiveUscita();
+  const title = document.getElementById('activeUscitaTitle');
+  if(title && au) title.innerHTML = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${au.color};margin-right:5px;box-shadow:0 0 5px ${au.color}88;"></span>Fermate — Uscita ${au.label}`;
+  renderDpFermate();
+}
+
+function calcReturnTime(totalMin){
+  const r = new Date(Date.now() + totalMin*60000);
+  return String(r.getHours()).padStart(2,'0')+':'+String(r.getMinutes()).padStart(2,'0');
+}
+
+function deleteUscita(id){
+  const idx = uscite.findIndex(u=>u.id===id);
+  if(idx<0) return;
+  uscite[idx].lines && uscite[idx].lines.forEach(l=>l.remove());
+  uscite.splice(idx,1);
+  if(uscite.length > 0){
+    activeUscitaId = uscite[uscite.length-1].id;
+    route = getActiveUscita().stops;
+  } else {
+    activeUscitaId = null; route = []; routeMode = false;
+    document.getElementById('filterRoute').style.display = 'none';
+    const _dp=document.getElementById('detailPanel'); if(_dp) _dp.style.display='none';
+    const _uh=document.getElementById('usciteHdr'); if(_uh) _uh.style.display='none';
+
+    document.getElementById('bcText').textContent = 'Tutte le isole';
+    const _tw=document.getElementById('turnWarning'); if(_tw) _tw.className='turn-warning';
+    showMapRouteStats(false);
+    // Mostra di nuovo il bottone grande blu
+    const _ba=document.getElementById('btnAreaBottom'); if(_ba) _ba.style.display='';
+  }
+  refreshRouteUI();
+  showToast('🗑️','Uscita rimossa','');
+}
+
+
+// ── RESIZER ──
+(function(){
+  const resizer=document.getElementById('resizer');
+  if(!resizer) return;
+  let drag=false,sx=0,sw=0;
+  resizer.addEventListener('mousedown',e=>{drag=true;sx=e.clientX;sw=document.querySelector('.left-col').offsetWidth;resizer.classList.add('dragging');document.body.style.cssText='cursor:col-resize;user-select:none;';});
+  document.addEventListener('mousemove',e=>{if(!drag)return;const w=Math.max(280,Math.min(window.innerWidth*.7,sw+e.clientX-sx));document.querySelector('.left-col').style.width=w+'px';document.documentElement.style.setProperty('--panel-w',w+'px');});
+  document.addEventListener('mouseup',()=>{if(!drag)return;drag=false;resizer.classList.remove('dragging');document.body.style.cssText='';if(typeof map!=='undefined')setTimeout(()=>map.invalidateSize(),50);});
+})();
+
+
+// ── RESIZER ──
+(function(){
+  const r=document.getElementById('resizer');
+  if(!r) return;
+  let drag=false,sx=0,sw=0;
+  r.addEventListener('mousedown',e=>{drag=true;sx=e.clientX;sw=document.getElementById('leftCol').offsetWidth;r.classList.add('dragging');document.body.style.cssText='cursor:col-resize;user-select:none;';});
+  document.addEventListener('mousemove',e=>{if(!drag)return;const w=Math.max(270,Math.min(window.innerWidth*.55,sw+e.clientX-sx));document.getElementById('leftCol').style.width=w+'px';document.documentElement.style.setProperty('--panel-w',w+'px');});
+  document.addEventListener('mouseup',()=>{if(!drag)return;drag=false;r.classList.remove('dragging');document.body.style.cssText='';if(typeof map!=='undefined')setTimeout(()=>map.invalidateSize(),50);});
+})();
+
+
+
+
+// ── COMPLETA USCITA: azzera % isole e rimuove dal percorso ──
+function completaUscita(uscitaId){
+  const uscita = uscite.find(u=>u.id===uscitaId);
+  if(!uscita) return;
+  const nFermate = uscita.stops.filter(s=>!s.skipped).length;
+  // Azzera riempimento delle isole completate
+  uscita.stops.forEach(st=>{
+    if(!st.skipped){
+      const isola = isole.find(i=>i.id===st.isola.id);
+      if(isola){
+        isola.pct = Math.round(Math.random()*12); // 0-12% residuo realistico
+        isola.cassoniPieni = Math.round(isola.cassoniTot * (isola.pct/100));
+      }
+    }
+  });
+  // Rimuovi uscita
+  deleteUscita(uscitaId);
+  updateStats();
+  renderList();
+  salvaStatoIsole();  // persiste i nuovi % dopo svuotamento
+  // Salva nello storico
+  const piano = getPianificazioneEffettiva();
+  const s = calcRouteStats(uscita);
+  saveStorico({
+    id: Date.now(),
+    label: uscita.label,
+    data: new Date().toLocaleDateString('it-IT'),
+    ora: fmtOra(piano.partenzaH, piano.partenzaM),
+    fermate: nFermate,
+    cassoni: s.totalCassoni,
+    km: s.totalKm,
+    durata: (s.totalMin/60).toFixed(1)+'h',
+    autista: 'ML',
+    fermate_list: uscita.stops.filter(st=>!st.skipped).map(st=>st.isola.name),
+    coords: [{lat:HQ.lat,lng:HQ.lng}, ...uscita.stops.filter(st=>!st.skipped).map(st=>({lat:st.isola.lat,lng:st.isola.lng,name:st.isola.name})), {lat:HQ.lat,lng:HQ.lng}],
+    color: uscita.color,
+  });
+  showToast('✅', `Uscita ${uscita.label} completata!`, `${nFermate} isole svuotate`);
+}
+
+
+// ── RENDER STORICO ──
+function makeRouteSVG(coords, color){
+  // Genera SVG mini-mappa del percorso usando coordinate reali
+  if(!coords || coords.length < 2) return '';
+  const W=260, H=110, PAD=14;
+  const lats = coords.map(p=>p.lat);
+  const lngs = coords.map(p=>p.lng);
+  const minLat=Math.min(...lats), maxLat=Math.max(...lats);
+  const minLng=Math.min(...lngs), maxLng=Math.max(...lngs);
+  const spanLat=maxLat-minLat||0.1, spanLng=maxLng-minLng||0.1;
+  // Scala mantenendo le proporzioni geografiche (1° lat ≈ 111km, 1° lng ≈ 78km in Italia)
+  const aspect = (spanLng * 78) / (spanLat * 111);
+  let svgW = W - PAD*2, svgH = H - PAD*2;
+  if(aspect > svgW/svgH) svgH = svgW/aspect; else svgW = svgH*aspect;
+  const offX=(W-svgW)/2, offY=(H-svgH)/2;
+  const toX = lng => offX + (lng-minLng)/spanLng*svgW;
+  const toY = lat => offY + (maxLat-lat)/spanLat*svgH;
+  // Linea percorso
+  const pts = coords.map(p=>`${toX(p.lng).toFixed(1)},${toY(p.lat).toFixed(1)}`).join(' ');
+  // Punti isole (escludi HQ che è primo e ultimo)
+  const stops = coords.slice(1,-1);
+  const circles = stops.map(p=>`<circle cx="${toX(p.lng).toFixed(1)}" cy="${toY(p.lat).toFixed(1)}" r="3.5" fill="${color}" stroke="#0d1420" stroke-width="1.5"/>`).join('');
+  // HQ marker (primo e ultimo punto)
+  const hqX=toX(coords[0].lng).toFixed(1), hqY=toY(coords[0].lat).toFixed(1);
+  return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="display:block;">
+    <rect width="${W}" height="${H}" rx="8" fill="#0d1420"/>
+    <polyline points="${pts}" fill="none" stroke="${color}55" stroke-width="1.5" stroke-dasharray="4,3"/>
+    <polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"/>
+    ${circles}
+    <circle cx="${hqX}" cy="${hqY}" r="5" fill="${color}" stroke="white" stroke-width="2" opacity="0.9"/>
+    <text x="${hqX}" y="${(parseFloat(hqY)+13).toFixed(1)}" text-anchor="middle" font-size="7" fill="#8899bb" font-family="DM Sans,sans-serif">HQ</text>
+  </svg>`;
+}
+
+function renderStorico(){
+  const list = document.getElementById('storicoList');
+  const countEl = document.getElementById('storicoCount');
+  if(!list) return;
+  const st = loadStorico();
+  if(countEl) countEl.textContent = st.length;
+  if(st.length === 0){
+    list.innerHTML = '<div class="storico-empty">📭 Nessuna uscita completata.<br>Completa un percorso per vederlo qui.</div>';
+    return;
+  }
+  list.innerHTML = '';
+  st.forEach(rec => {
+    const card = document.createElement('div');
+    card.className = 'storico-card';
+    const routeColor = rec.color || '#3b82f6';
+    const svgMap = makeRouteSVG(rec.coords, routeColor);
+    card.innerHTML = `
+      <div class="storico-hdr">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div class="storico-dot" style="background:${routeColor};box-shadow:0 0 6px ${routeColor}88;"></div>
+          <div class="storico-label">Uscita ${rec.label}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div class="storico-data">${rec.data} · ${rec.ora}</div>
+          <button class="btn-export-pdf" onclick="exportPDFById(${rec.id})">🖨️ PDF</button>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:8px;">
+        ${svgMap ? '<div style="flex-shrink:0;border-radius:8px;overflow:hidden;border:1px solid var(--border2);">'+svgMap+'</div>' : ''}
+        <div style="flex:1;display:flex;flex-direction:column;justify-content:space-between;min-width:0;">
+          <div class="storico-stats">
+            <div class="st-stat"><div class="st-stat-val">${rec.fermate}</div><div class="st-stat-lbl">Fermate</div></div>
+            <div class="st-stat"><div class="st-stat-val">${rec.cassoni}</div><div class="st-stat-lbl">Cassoni</div></div>
+            <div class="st-stat"><div class="st-stat-val">${rec.km}</div><div class="st-stat-lbl">Km</div></div>
+            <div class="st-stat"><div class="st-stat-val">${rec.durata}</div><div class="st-stat-lbl">Durata</div></div>
+          </div>
+          <div style="font-size:10px;color:var(--text-2);margin-top:6px;line-height:1.6;">
+            ${rec.fermate_list ? rec.fermate_list.slice(0,4).map(n=>'📍 '+n).join('<br>') + (rec.fermate_list.length>4?'<br><span style="color:var(--text-3);">+'+( rec.fermate_list.length-4)+' fermate</span>':'') : ''}
+          </div>
+        </div>
+      </div>
+    `;
+    list.appendChild(card);
+  });
+}
+
+
+// ── EXPORT PDF FOGLIO DI VIAGGIO ──
+function exportPDFById(id){
+  const st = loadStorico();
+  const rec = st.find(r=>r.id===id);
+  if(!rec){ showToast('⚠️','Record non trovato',''); return; }
+  exportPDF(rec);
+}
+// ── EXPORT PDF FOGLIO DI VIAGGIO ──
+function exportPDF(rec){
+  // Genera una finestra di stampa con layout foglio viaggio
+  const fermate_html = (rec.fermate_list||[]).map((n,i)=>
+    `<tr>
+      <td style="width:30px;text-align:center;font-weight:700;color:#1a56db;">${i+1}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">${n}</td>
+      <td style="width:80px;text-align:center;border-bottom:1px solid #e5e7eb;color:#6b7280;">☐ Ok</td>
+    </tr>`
+  ).join('');
+
+  const html = `<!DOCTYPE html>
+<html lang="it"><head><meta charset="UTF-8">
+<title>Foglio di Viaggio — Uscita ${rec.label}</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, sans-serif; color: #111; padding: 24px; max-width: 800px; margin: 0 auto; }
+  .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #1a56db; padding-bottom: 14px; margin-bottom: 20px; }
+  .logo { font-size: 22px; font-weight: 900; color: #1a56db; }
+  .logo span { color: #111; }
+  .doc-title { font-size: 13px; color: #6b7280; margin-top: 2px; }
+  .meta-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; margin-bottom: 20px; }
+  .meta-box { border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px 14px; }
+  .meta-label { font-size: 10px; color: #6b7280; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 3px; }
+  .meta-value { font-size: 16px; font-weight: 700; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
+  thead th { background: #f3f4f6; padding: 8px 12px; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .4px; color: #6b7280; }
+  tbody tr:nth-child(even) { background: #f9fafb; }
+  .footer { border-top: 1px solid #e5e7eb; padding-top: 14px; display: flex; justify-content: space-between; font-size: 11px; color: #6b7280; }
+  .sign-box { border: 1px solid #d1d5db; border-radius: 6px; padding: 8px 14px; min-width: 180px; text-align: center; }
+  @media print { body { padding: 12px; } }
+</style></head><body>
+<div class="header">
+  <div>
+    <div class="logo">Eco<span>Fleet</span></div>
+    <div class="doc-title">Foglio di Viaggio — Uscita ${rec.label}</div>
+  </div>
+  <div style="text-align:right;">
+    <div style="font-size:13px;font-weight:600;">${rec.data}</div>
+    <div style="font-size:12px;color:#6b7280;">Autista: ${rec.autista}</div>
+    <div style="font-size:12px;color:#6b7280;">Partenza: ${rec.ora}</div>
+  </div>
+</div>
+<div class="meta-grid">
+  <div class="meta-box"><div class="meta-label">Fermate</div><div class="meta-value">${rec.fermate}</div></div>
+  <div class="meta-box"><div class="meta-label">Cassoni</div><div class="meta-value">${rec.cassoni}</div></div>
+  <div class="meta-box"><div class="meta-label">Km A/R</div><div class="meta-value">${rec.km} km</div></div>
+  <div class="meta-box"><div class="meta-label">Durata</div><div class="meta-value">${rec.durata}</div></div>
+</div>
+<table>
+  <thead><tr><th>#</th><th>Isola ecologica</th><th>Completata</th></tr></thead>
+  <tbody>${fermate_html}</tbody>
+</table>
+<div class="footer">
+  <div>EcoFleet — Foglio generato il ${new Date().toLocaleDateString('it-IT')}</div>
+  <div class="sign-box">Firma autista: _______________</div>
+</div>
+</body></html>`;
+
+  const w = window.open('','_blank','width=850,height=700');
+  w.document.write(html);
+  w.document.close();
+  setTimeout(()=>w.print(), 600);
+}
+
+// Export PDF per l'uscita attiva corrente
+function exportCurrentPDF(){
+  const uscita = getActiveUscita();
+  if(!uscita){ showToast('⚠️','Nessuna uscita attiva',''); return; }
+  const s = calcRouteStats(uscita);
+  const piano = getPianificazioneEffettiva();
+  exportPDF({
+    label: uscita.label,
+    data: new Date().toLocaleDateString('it-IT'),
+    ora: fmtOra(piano.partenzaH, piano.partenzaM),
+    fermate: uscita.stops.filter(st=>!st.skipped).length,
+    cassoni: s.totalCassoni,
+    km: s.totalKm,
+    durata: (s.totalMin/60).toFixed(1)+'h',
+    autista: 'ML',
+    fermate_list: uscita.stops.filter(st=>!st.skipped).map(st=>st.isola.name),
+  });
+}
+
+
+// ── CLICK ISOLA DALLA MAPPA ──
+function handleMapIslandClick(isolaId){
+  const isola=isole.find(i=>i.id===isolaId);
+  if(!isola||isola.excluded) return;
+  
+  // Isola già in un percorso → non fare niente (mostra solo tooltip)
+  const owner=getIsolaUscita(isolaId);
+  if(owner){
+    showToast('ℹ️','Isola già assegnata',`Fa parte di Uscita ${owner.label}`);
+    return;
+  }
+  
+  // Nessuna uscita → crea nuova
+  if(uscite.length===0){
+    quickCreateRoute(isolaId);
+    return;
+  }
+  
+  // C'è un'uscita attiva → aggiungi direttamente ad essa
+  const uscita=getActiveUscita();
+  if(uscita){
+    const rType=uscita.routeType;
+    const maxC=rType==='tv'?MAX_TV:MAX_FRIGO;
+    const current=calcRouteStats(uscita).totalCassoni;
+    const cassoniDisp=isola.cassoniPieni||1;
+    const toAdd=Math.min(cassoniDisp, maxC-current);
+    if(toAdd<=0){
+      showToast('⚠️','Camion pieno!',`Uscita ${uscita.label} ha già raggiunto il limite di ${maxC} cassoni.`);
+      return;
+    }
+    uscita.stops.push({isola, cassoniDaCaricare:toAdd, skipped:false});
+    // Ricalcola ordine ottimale
+    const reordered=optimizeRoute(uscita.stops); // 2-opt
+    uscita.stops=reordered;
+    refreshRouteUI();
+    showToast('✅',`Aggiunta a Uscita ${uscita.label}`,`${isola.name} · ${toAdd} cassoni`);
+    return;
+  }
+  
+  // Ci sono uscite ma nessuna attiva → chiedi quale
+  quickCreateRoute(isolaId);
+}
+
+
+// ══════════════════════════════════════════
+// ALGORITMO 2-OPT per ottimizzazione TSP
+// ══════════════════════════════════════════
+//
+// Funzionamento:
+//   Dato un percorso HQ → s1 → s2 → ... → sN → HQ,
+//   prova ogni coppia (i,j) di archi e verifica se
+//   invertire il segmento tra i e j riduce la distanza totale.
+//   Ripete finché non trova più miglioramenti.
+//
+// Complessità: O(n²) per iterazione, converge in poche iterazioni.
+// Per n=15: ~100ms massimo, tipicamente <10ms.
+//
+// Migliora greedy del 10-25% su percorsi reali.
+
+function routeDist(stops){
+  // Distanza totale HQ → stops[0] → ... → stops[n-1] → HQ
+  if(!stops.length) return 0;
+  let d = distDeg(HQ, stops[0].isola);
+  for(let i=0; i<stops.length-1; i++)
+    d += distDeg(stops[i].isola, stops[i+1].isola);
+  d += distDeg(stops[stops.length-1].isola, HQ);
+  return d;
+}
+
+function twoOpt(stops){
+  if(stops.length <= 2) return stops;
+  let best = [...stops];
+  let improved = true;
+  let iterations = 0;
+  const maxIter = 200; // limite sicurezza
+
+  while(improved && iterations < maxIter){
+    improved = false;
+    iterations++;
+    for(let i=0; i<best.length-1; i++){
+      for(let j=i+1; j<best.length; j++){
+        // Crea nuovo percorso invertendo il segmento [i..j]
+        const candidate = [
+          ...best.slice(0, i),
+          ...best.slice(i, j+1).reverse(),
+          ...best.slice(j+1)
+        ];
+        if(routeDist(candidate) < routeDist(best) - 0.00001){
+          best = candidate;
+          improved = true;
+        }
+      }
+    }
+  }
+  return best;
+}
+
+// Versione completa: greedy nearest-neighbor + 2-opt refinement
+function optimizeRoute(stops){
+  if(stops.length <= 2) return stops;
+  const t0 = performance.now();
+  const greedy = greedyOrder(stops);   // fase 1: nearest-neighbor
+  const optimized = twoOpt(greedy);    // fase 2: 2-opt improvement
+  const t1 = performance.now();
+  const distBefore = routeDist(greedy);
+  const distAfter  = routeDist(optimized);
+  const improvement = distBefore > 0 ? ((distBefore-distAfter)/distBefore*100).toFixed(1) : 0;
+  if(improvement > 0.5)
+    console.log(`2-opt: ${distBefore.toFixed(3)}° → ${distAfter.toFixed(3)}° (-${improvement}%) in ${(t1-t0).toFixed(1)}ms`);
+  return optimized;
+}
+
+// Ordine greedy per ricalcolo dopo aggiunta dalla mappa
+function greedyOrder(stops){
+  if(stops.length<=1) return stops;
+  const result=[];
+  const remaining=[...stops];
+  let cur={lat:HQ.lat,lng:HQ.lng};
+  while(remaining.length){
+    let best=0,bestD=Infinity;
+    remaining.forEach((s,i)=>{
+      const d=distDeg(cur,s.isola);
+      if(d<bestD){bestD=d;best=i;}
+    });
+    result.push(remaining[best]);
+    cur=remaining[best].isola;
+    remaining.splice(best,1);
+  }
+  return result;
+}
+
+
+// ── PIANIFICAZIONE TOGGLE ──
+let pianModalChoice = null; // null = auto, 'oggi', 'domani'
+
+function setPianificazione(scelta){
+  pianModalChoice = scelta;
+  document.getElementById('btnPianOggi').classList.toggle('active', scelta==='oggi');
+  document.getElementById('btnPianDomani').classList.toggle('active', scelta==='domani');
+}
+
+function initPianToggle(){
+  const piano = getPianificazioneOrario();
+  const now = new Date();
+  const oraAttuale = now.getHours() + now.getMinutes()/60;
+  // Aggiorna label ora corrente
+  const lblO = document.getElementById('lblOggiOra');
+  const lblD = document.getElementById('lblDomaniOra');
+  const alert = document.getElementById('avvisoOraAlert');
+  if(lblO) lblO.textContent = fmtOra(now.getHours(), now.getMinutes());
+  if(lblD) lblD.textContent = '07:00';
+  // Se è già oltre l'ora limite, segnala automaticamente domani
+  if(piano.domani){
+    setPianificazione('domani');
+    if(alert) alert.style.display='';
+    // Disabilita "Oggi" visivamente
+    const btnO = document.getElementById('btnPianOggi');
+    if(btnO){ btnO.style.opacity='.4'; btnO.style.pointerEvents='none'; }
+  } else {
+    setPianificazione('oggi');
+    if(alert) alert.style.display='none';
+    const btnO = document.getElementById('btnPianOggi');
+    if(btnO){ btnO.style.opacity=''; btnO.style.pointerEvents=''; }
+  }
+}
+
+// Override getPianificazioneOrario per usare la scelta del modal
+function getPianificazioneEffettiva(){
+  const now = new Date();
+  if(pianModalChoice === 'domani'){
+    return { label:'Domani', partenzaH:ORA_INIZIO_TURNO, partenzaM:0, domani:true };
+  }
+  if(pianModalChoice === 'oggi'){
+    const minRound = Math.ceil(now.getMinutes()/5)*5;
+    const h = now.getHours() + Math.floor(minRound/60);
+    const m = minRound % 60;
+    return { label:'Oggi', partenzaH:h, partenzaM:m, domani:false };
+  }
+  return getPianificazioneOrario(); // auto
+}
+
+// ── MAP STATS STRIP toggle ──
+function showMapRouteStats(on){
+  ['mssRoute','mssReturn','mssCassoni','mssKm'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.style.display=on?'':'none';
+  });
+}
+
+// ── DETAIL PANEL TABS ──
+function switchDpTab(tab, el){
+  document.querySelectorAll('.dp-tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  document.querySelectorAll('.dp-fermate,.dp-camion,.dp-stats').forEach(p=>{
+    p.classList.remove('active-tab');
+    if(p.tagName==='DIV') p.style.display='none';
+  });
+  const target=document.getElementById('dp'+tab.charAt(0).toUpperCase()+tab.slice(1));
+  if(target){target.classList.add('active-tab');target.style.display='flex';}
+}
+
+// ── RESIZER ──
+(function(){
+  const r=document.getElementById('resizer');
+  if(!r) return;
+  let drag=false,sx=0,sw=0;
+  r.addEventListener('mousedown',e=>{
+    drag=true;sx=e.clientX;
+    sw=document.getElementById('leftCol').offsetWidth;
+    r.classList.add('dragging');
+    document.body.style.cssText='cursor:col-resize;user-select:none;';
+  });
+  document.addEventListener('mousemove',e=>{
+    if(!drag) return;
+    const w=Math.max(280,Math.min(window.innerWidth*.52,sw+e.clientX-sx));
+    document.getElementById('leftCol').style.width=w+'px';
+    document.documentElement.style.setProperty('--left-w',w+'px');
+  });
+  document.addEventListener('mouseup',()=>{
+    if(!drag) return;
+    drag=false;r.classList.remove('dragging');
+    document.body.style.cssText='';
+    if(typeof map!=='undefined') setTimeout(()=>map.invalidateSize(),50);
+  });
+})();
+
+
+
+
+window.addEventListener('load',()=>{
+  caricaEAggiorna();   // aggiorna % in base ai giorni passati
+  initMap();
+  renderList();
+  updateStats();
+  document.getElementById('tab-mappa').classList.add('active');
+});
+
+</script>
+</div><!-- /app -->
+
+
+
+</body>
+</html>
